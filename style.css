@@ -1,0 +1,32 @@
+/* Fullscreen canvas-only game styling */
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #071022;
+  overflow: hidden;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(180deg,#071022,#04111a);
+}
+
+/* HUD tweaks */
+.perk {
+  font-size: 12px;
+  color: #fff;
+}
+.perk-list {
+  position: absolute;
+  left: 12px;
+  top: 62px;
+  max-width: 280px;
+}
+
+/* prevent text selection while playing */
+* { user-select: none; -webkit-user-select: none; }
