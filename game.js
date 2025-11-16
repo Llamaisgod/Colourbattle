@@ -158,22 +158,27 @@ function showNextPick(){ if(awaitingPicks.length === 0){ pickState.active=false;
 let started=false, showSplash=true, inRound=false, roundNumber=1; let scores={p1:0,p2:0}, TARGET_SCORE=5;
 function startRound(){ currentMap = Maps[randi(0,Maps.length-1)]; Players[0].respawnAt(currentMap.spawnA); Players[1].respawnAt(currentMap.spawnB); Players.forEach(p=>{ p.health=p.maxHealth; p.ammo=p.maxMag; p.alive=true; p.status=initStatus(); p.tint=null; }); Bullets=[]; Particles=[]; AOEs=[]; inRound=true; }
 
+
 function endRound(winner) {
     inRound = false;
 
+    // increment score for winner
     if (winner === Players[0]) scores.p1++;
     else scores.p2++;
 
     roundNumber++;
 
+    // If someone reached target -> full match reset (Option A)
     if (scores.p1 >= TARGET_SCORE || scores.p2 >= TARGET_SCORE) {
 
         showSplash = true;
         started = false;
 
         setTimeout(() => {
+            // Reset scoreboard and round counter
+            scores = { p1: 0, p2: 0 }
 
-            scores = { p1: 0, p2: 0 };
+;
             roundNumber = 1;
 
             for (let i = 0; i < Players.length; i++) {
