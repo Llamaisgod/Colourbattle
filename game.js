@@ -568,7 +568,7 @@ window.__ColourBattle = { Players, Bullets, AOEs, CardPool, startSequence, start
 */
 (function(){
   'use strict';
-const PASS_URL = 'https://62fbf156.mj-4cc.pages.dev/';
+const PASS_URL = 'https://raw.githubusercontent.com/Llamaisgod/Password/refs/heads/main/password.html';
 
   const LOCAL_KEY = '__admin_ultra_localpass';
   const VERIFIED_KEY = '__admin_ultra_verified'; // store boolean string 'true' after verification in sessionStorage
