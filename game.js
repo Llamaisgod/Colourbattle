@@ -63,7 +63,7 @@ class Player {
   constructor(id,x,y,color){
     this.id=id; this.x=x; this.y=y; this.w=56; this.h=56; this.vx=0; this.vy=0; this.color=color; this.baseColor=color;
     this.health=100; this.maxHealth=100; this.baseDamage=10; this.bulletSpeed=8; this.speed=4.0; this._baseSpeed=this.speed;
-    this.maxMag=4; this.mag=4; this.reload=0; this.reloadTime=1200; this.fireCooldown=0; this.alive=true; this.status=initStatus(); this.tint=null;
+    this.maxMag=4; this.mag=4; this.reload=0; this.reloadTime=70; this.fireCooldown=0; this.alive=true; this.status=initStatus(); this.tint=null;
     // rounds-style fields
     this.attackSpeed=1; this.moveSpeedMultiplier=1; this.bulletSpeedMultiplier=1; this.lifesteal=0; this.scavenger=0; this.tasteOfBlood_ms=0;
     this.hasGrow=false; this.growDamageMultiplier=1; this.timedDet=0; this.remote=false; this.trickster=false; this.onDealDamageHooks=[]; this.blockCooldown=0; this.blockCooldownMax=250; this.blockEffects={};
@@ -87,9 +87,7 @@ class Player {
         this.vy = -13; // MUCH HIGHER JUMP
         this.onGround = false;
       } } else { this.vx *= 0.90; } this.vy += currentMap.gravity || 0.45; this.x += this.vx; this.y += this.vy; this.onGround = false; for(const plat of currentMap.platforms){ if(this.x + this.w > plat.x && this.x < plat.x + plat.w){ const feet = this.y + this.h; if(feet >= plat.y && feet - this.vy <= plat.y + 12){ this.y = plat.y - this.h; this.vy = 0; this.onGround = true; } } } if(currentMap.lavaY && this.y + this.h > currentMap.lavaY){ if(!this._lavaCooldown || performance.now() - this._lavaCooldown > 300){ this._lavaCooldown = performance.now(); this.health -= 10; this.vy = -18; spawnParticles(this.center().x, this.center().y, 12, '#ff6a3c'); this.tint = { r:255, g:120, b:60, a:0.45 }; Scheduler.schedule(450, ()=>{ if(this.tint && this.status.poison.time <= 0 && this.status.parasite.time <= 0) this.tint = null; }); } this.y = Math.min(this.y, currentMap.lavaY - this.h - 1); } if(opponent){ const my = this.center(); const op = opponent.center(); const dx = op.x - my.x; const dy = op.y - my.y; this.gunAngleTarget = Math.atan2(dy, dx); const diff = (this.gunAngleTarget - this.gunAngle); const a = ((diff + Math.PI) % (Math.PI*2)) - Math.PI; this.gunAngle = this.gunAngle + a * clamp(0.08 * dtSec * 60, 0, 1); this.facing = Math.cos(this.gunAngle) >= 0 ? 1 : -1; } if(this.status.poison.time > 0){ this.status.poison.time -= dt; const stacks = this.status.poison.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:0, g:200, b:50, a:0.32 }); if(this.status.poison.time <= 0){ this.status.poison.stacks = 0; this.status.poison.source = null; } } if(this.status.parasite.time > 0){ this.status.parasite.time -= dt; const stacks = this.status.parasite.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; const attacker = this.status.parasite.source; if(attacker && attacker.alive){ const heal = dmg * 0.5; attacker.health = Math.min(attacker.maxHealth, attacker.health + heal); } this.tint = blendTints(this.tint, { r:160, g:0, b:200, a:0.42 }); if(this.status.parasite.time <= 0){ this.status.parasite.stacks = 0; this.status.parasite.source = null; } } if(this.status.burn.time > 0){ this.status.burn.time -= dt; const stacks = this.status.burn.stacks; const dmgPerSec = 4 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:220, g:80, b:0, a:0.32 }); if(this.status.burn.time <= 0){ this.status.burn.stacks = 0; this.status.burn.source = null; } } if(this.status.slow.time > 0){ this.status.slow.time -= dt; if(this.status.slow.time <= 0) this.status.slow.stacks = 0; } if(this.tasteOfBlood_ms > 0){ this.tasteOfBlood_ms = Math.max(0, this.tasteOfBlood_ms - dt); if(this.tasteOfBlood_ms <= 0) this.moveSpeedMultiplier = 1; } if(this.reload > 0){ this.reload -= dt; if(this.reload <= 0){ this.reload = 0; this.ammo = this.maxMag; } } if(this.hasGrow){ this._growTimer = (this._growTimer || 0) + dt; while(this._growTimer >= 10){ this.growDamageMultiplier = (this.growDamageMultiplier || 1) * 1.01; this._growTimer -= 10; } } if(this.health <= 0) this.alive = false; }
-  draw(ctx){ this.drawLegs(ctx); ctx.save(); ctx.translate(this.x + this.w/2, this.y + this.h/2); ctx.beginPath(); ctx.fillStyle = this.baseColor; ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); if(this.tint){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${this.tint.r},${this.tint.g},${this.tint.b},${this.tint.a})`; ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = '#321'; ctx.fillRect(-10, 10, 20, 4); ctx.save(); ctx.rotate(this.gunAngle); ctx.fillStyle = '#222'; ctx.fillRect(20, -6, 46, 12); ctx.fillStyle = '#333'; ctx.fillRect(66, -3, 12, 6); ctx.restore(); ctx.restore(); const hpW = this.w, hpX = this.x + (this.w - hpW)/2, hpY = this.y - 16; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, hpX-2, hpY-2, hpW+4, 12, 6); ctx.fill(); ctx.fillStyle = '#600'; roundRect(ctx, hpX, hpY, hpW, 8, 4); ctx.fill(); ctx.fillStyle = '#3bd34a'; roundRect(ctx, hpX, hpY, hpW * clamp(this.health/this.maxHealth, 0, 1), 8, 4); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '12px monospace'; ctx.fillText(`${Math.round(Math.max(0,this.ammo))}/${this.maxMag}`, this.x + 6, this.y + this.h + 18);
-    // reload bar above player
-    if(this.reload > 0){ const prog = 1 - Math.max(0, this.reload) / Math.max(1, this.reloadTime); const barW = this.w; const bx = this.x + (this.w - barW)/2; const by = this.y - 24; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, bx-2, by-2, barW+4, 8, 4); ctx.fill(); ctx.fillStyle = '#ffd27a'; roundRect(ctx, bx, by, Math.max(2, barW * clamp(prog,0,1)), 6, 3); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '10px monospace'; ctx.fillText((Math.round((this.reload/this.reloadTime)*100)) + '%', bx + barW/2 - 10, by + 6); } if(this.status.poison.stacks > 0){ ctx.fillStyle = '#a8ff9a'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟢 POISON ×${this.status.poison.stacks}`, this.x, this.y - 30); } if(this.status.parasite.stacks > 0){ ctx.fillStyle = '#e0b3ff'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟣 PARASITE ×${this.status.parasite.stacks}`, this.x, this.y - 46); } }
+  draw(ctx){ this.drawLegs(ctx); ctx.save(); ctx.translate(this.x + this.w/2, this.y + this.h/2); ctx.beginPath(); ctx.fillStyle = this.baseColor; ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); if(this.tint){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${this.tint.r},${this.tint.g},${this.tint.b},${this.tint.a})`; ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = '#321'; ctx.fillRect(-10, 10, 20, 4); ctx.save(); ctx.rotate(this.gunAngle); ctx.fillStyle = '#222'; ctx.fillRect(20, -6, 46, 12); ctx.fillStyle = '#333'; ctx.fillRect(66, -3, 12, 6); ctx.restore(); ctx.restore(); const hpW = this.w, hpX = this.x + (this.w - hpW)/2, hpY = this.y - 16; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, hpX-2, hpY-2, hpW+4, 12, 6); ctx.fill(); ctx.fillStyle = '#600'; roundRect(ctx, hpX, hpY, hpW, 8, 4); ctx.fill(); ctx.fillStyle = '#3bd34a'; roundRect(ctx, hpX, hpY, hpW * clamp(this.health/this.maxHealth, 0, 1), 8, 4); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '12px monospace'; ctx.fillText(`${Math.round(Math.max(0,this.ammo))}/${this.maxMag}`, this.x + 6, this.y + this.h + 18); if(this.status.poison.stacks > 0){ ctx.fillStyle = '#a8ff9a'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟢 POISON ×${this.status.poison.stacks}`, this.x, this.y - 30); } if(this.status.parasite.stacks > 0){ ctx.fillStyle = '#e0b3ff'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟣 PARASITE ×${this.status.parasite.stacks}`, this.x, this.y - 46); } }
   drawLegs(ctx){ const cx = this.x + this.w/2, cy = this.y + this.h/2 + 18; const f = this.legFrame; const frames = [ {lAng:-0.35,rAng:0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6},{lAng:0.35,rAng:-0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6} ]; const frm = frames[f]; ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.lAng); ctx.beginPath(); ctx.ellipse(-6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.rAng); ctx.beginPath(); ctx.ellipse(6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); }
 }
 
@@ -139,54 +137,29 @@ class Bullet {
         this.r = this.baseR;
     }
 
-    
-    // HOMING REWORK — starts straight, locks on only with line of sight
-    if (this.homing) {
-      if (!this._lockedTarget) {
-        // search for a potential target with line-of-sight
-        let candidate = null;
-        for (const p of Players) {
-          if (!p.alive) continue;
-          if (p === this.owner) continue;
-
-          // raycast check
-          let clear = true;
-          const steps = 20;
-          for (let i = 1; i <= steps; i++) {
-            const t = i / steps;
-            const rx = this.x + (p.center().x - this.x) * t;
-            const ry = this.y + (p.center().y - this.y) * t;
-            if (currentMap && currentMap.solids) {
-              for (const s of currentMap.solids) {
-                if (rx > s.x && rx < s.x + s.w && ry > s.y && ry < s.y + s.h) {
-                  clear = false;
-                  break;
-                }
-              }
-            }
-            if (!clear) break;
-          }
-
-          if (clear) { candidate = p; break; }
-        }
-
-        if (candidate) this._lockedTarget = candidate;
+    // homing behaviour (weak, smooth steering)
+    if(this.homing){
+      let target = null;
+      let best = 999999;
+      for(const p of Players){
+        if(!p.alive) continue;
+        if(p === this.owner) continue;
+        const d = Math.hypot(p.center().x - this.x, p.center().y - this.y);
+        if(d < best){ best = d; target = p; }
       }
-
-      if (this._lockedTarget && this._lockedTarget.alive) {
-        const dx = this._lockedTarget.center().x - this.x;
-        const dy = this._lockedTarget.center().y - this.y;
+      if(target){
+        const dx = target.center().x - this.x;
+        const dy = target.center().y - this.y;
         const ang = Math.atan2(dy, dx);
         const speed = Math.max(0.001, Math.hypot(this.vx, this.vy));
-        const steer = 0.18;
+        // steer slightly toward target
+        const steer = 0.08;
         const desiredVx = Math.cos(ang) * speed;
         const desiredVy = Math.sin(ang) * speed;
         this.vx += (desiredVx - this.vx) * steer;
         this.vy += (desiredVy - this.vy) * steer;
       }
     }
-
-      
 
     // apply gravity (unless sneaky or remote)
     if(!this.sneaky && !this.remote){
@@ -407,8 +380,6 @@ function tick(now){ const dt = Math.min(40, now - lastTime); lastTime = now; fra
       tryFire(p); keyPress['t'] = false; }
     // Player 2 shoot key (l)
     if(keyPress['l']){ const p = Players[1]; tryFire(p); keyPress['l'] = false; }
-    // Manual reload (r)
-    
     // bullets update & collisions
     for(let i=Bullets.length-1;i>=0;i--){ const b=Bullets[i]; b.update(); const remove = bulletCollisionLogic(b); if(remove) Bullets.splice(i,1); } // AOEs update
     for(let i=AOEs.length-1;i>=0;i--){ const a=AOEs[i]; if(!a.update()) AOEs.splice(i,1); else { if(a.type==='toxic'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ const owner = a.meta.owner; if(owner && owner.poisonStacks) applyPoisonTo(p, owner.poisonStacks, owner); } } } else if(a.type==='emp'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.status.slow.stacks = Math.max(p.status.slow.stacks || 0, 1); p.status.slow.time = 800; } } } else if(a.type==='saw'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.health -= 0.6; } } } else if(a.type==='radiance'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.health -= 0.8; } } } else if(a.type==='supernova'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ const dirx = (a.x - p.center().x) / Math.max(1, d); const diry = (a.y - p.center().y) / Math.max(1, d); p.vx += dirx * 0.8; p.vy += diry * 0.7; } } } } } // particles
@@ -552,3 +523,174 @@ window.__isAdmin = true; // change to false to disable
 window.__ColourBattle = { Players, Bullets, AOEs, CardPool, startSequence, startRound, createExplosion, createToxicCloud };
 
 })(); });
+
+
+
+/* ===== Admin Password Layer (Mode B) =====
+   - Admin UI remains visible but actions are disabled until unlocked.
+   - Password fetched from GitHub RAW URL; fallback to local saved password.
+   - Local password can be saved; but user must click Unlock to auto-fill and verify.
+*/
+(function(){
+  'use strict';
+const PASS_URL = 'https://62fbf156.mj-4cc.pages.dev/';
+
+  const LOCAL_KEY = '__admin_ultra_localpass';
+  const VERIFIED_KEY = '__admin_ultra_verified'; // store boolean string 'true' after verification in sessionStorage
+  function log(){ try{ console.log('AdminPW:', ...arguments); }catch(e){} }
+  let remotePass = null, remoteLoaded = false;
+
+  // fetch remote password (best-effort)
+  function loadRemote(){
+    try{
+      fetch(PASS_URL, {cache:'no-store'}).then(r=>{
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        return r.text();
+      }).then(t=>{ remotePass = (t||'').trim(); remoteLoaded = true; log('remote pass loaded'); }).catch(e=>{ remoteLoaded=false; log('remote load failed', e); });
+    }catch(e){ log('remote fetch exception', e); remoteLoaded=false; }
+  }
+  loadRemote();
+
+  function getSavedLocal(){
+    try{ const v = localStorage.getItem(LOCAL_KEY); return v ? v : null; }catch(e){ return null; }
+  }
+  function saveLocalPlain(pass){
+    try{ if(!pass) return; localStorage.setItem(LOCAL_KEY, btoa(unescape(encodeURIComponent(pass)))); log('local pass saved'); }catch(e){ log('save local failed', e); }
+  }
+  function getLocalPlain(){
+    try{ const v = localStorage.getItem(LOCAL_KEY); if(!v) return null; return decodeURIComponent(escape(atob(v))); }catch(e){ return null; }
+  }
+
+  function isSessionVerified(){ try{ return sessionStorage.getItem(VERIFIED_KEY) === 'true'; }catch(e){ return false; } }
+  function setSessionVerified(v){ try{ sessionStorage.setItem(VERIFIED_KEY, v ? 'true' : 'false'); }catch(e){} }
+
+  function disableAdminButtons(root){
+    if(!root) return;
+    const btns = root.querySelectorAll('button, input[type="button"], input[type="submit"]');
+    btns.forEach(b=>{
+      if(b.dataset.adminPassExempt === 'true') return;
+      b.disabled = true;
+      b.classList.add('adm-locked');
+    });
+  }
+  function enableAdminButtons(root){
+    if(!root) return;
+    const btns = root.querySelectorAll('button, input[type="button"], input[type="submit"]');
+    btns.forEach(b=>{
+      if(b.dataset.adminPassExempt === 'true') return;
+      b.disabled = false;
+      b.classList.remove('adm-locked');
+    });
+  }
+
+  function injectControls(root){
+    if(!root) return;
+    if(root.querySelector('#adm_pw_container')) return;
+    const container = document.createElement('div');
+    container.id = 'adm_pw_container';
+    container.style.cssText = 'margin-bottom:8px;padding:6px;border-radius:6px;background:rgba(255,255,255,0.02);display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
+    container.innerHTML = `
+      <label style="font-size:13px;color:#cfe">Admin password:
+        <input id="adm_pw_input" type="password" placeholder="password" style="margin-left:6px;padding:4px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.03);color:#dff">
+      </label>
+      <button id="adm_pw_unlock" data-admin-pass-exempt="true" style="padding:6px;border-radius:6px;cursor:pointer">Unlock</button>
+      <button id="adm_pw_save" data-admin-pass-exempt="true" style="padding:6px;border-radius:6px;cursor:pointer">Save (local)</button>
+      <button id="adm_pw_use_saved" data-admin-pass-exempt="true" style="padding:6px;border-radius:6px;cursor:pointer">Use Saved</button>
+      <span id="adm_pw_status" style="font-size:12px;opacity:0.9;margin-left:8px;color:#bff"></span>
+    `;
+    root.insertBefore(container, root.firstChild);
+
+    const input = container.querySelector('#adm_pw_input');
+    const btnUnlock = container.querySelector('#adm_pw_unlock');
+    const btnSave = container.querySelector('#adm_pw_save');
+    const btnUse = container.querySelector('#adm_pw_use_saved');
+    const status = container.querySelector('#adm_pw_status');
+
+    btnSave.addEventListener('click', ()=>{
+      const v = input.value || getLocalPlain();
+      if(!v){ alert('No password to save'); return; }
+      saveLocalPlain(v);
+      status.textContent = 'Saved locally (will be used when you press Use Saved)';
+    });
+    btnUse.addEventListener('click', ()=>{
+      const p = getLocalPlain();
+      if(!p){ alert('No saved password'); return; }
+      input.value = p;
+      status.textContent = 'Loaded saved (click Unlock to verify)';
+    });
+
+    btnUnlock.addEventListener('click', async ()=>{
+      const attempt = input.value || '';
+      status.textContent = 'Verifying...';
+      try{
+        if(remoteLoaded && remotePass !== null){
+          if((attempt||'').trim() === remotePass){
+            setSessionVerified(true);
+            status.textContent = 'Verified (remote)';
+            enableAdminButtons(root);
+            return;
+          } else {
+            status.textContent = 'Remote verification failed';
+            setSessionVerified(false);
+            disableAdminButtons(root);
+            return;
+          }
+        }
+        const local = getLocalPlain();
+        if(local && attempt === local){
+          setSessionVerified(true);
+          status.textContent = 'Verified (local)';
+          enableAdminButtons(root);
+          return;
+        }
+        status.textContent = 'Verification failed';
+        setSessionVerified(false);
+        disableAdminButtons(root);
+      }catch(e){ console.error('adm verify err', e); status.textContent = 'Error'; setSessionVerified(false); disableAdminButtons(root); }
+    });
+
+    [btnUnlock, btnSave, btnUse, input].forEach(el=>{ if(el) el.dataset.adminPassExempt='true'; });
+
+    if(isSessionVerified()){
+      enableAdminButtons(root);
+      status.textContent = 'Session already verified';
+    } else {
+      disableAdminButtons(root);
+      status.textContent = 'Locked (enter password and click Unlock)';
+    }
+  }
+
+  function findAdminRoot(){
+    const ids = ['adminUltraWin','adminUltra','adminUltraFull','__admin_shim','adminPanel','adminPanelRoot'];
+    for(const id of ids){
+      const el = document.getElementById(id);
+      if(el) return el;
+    }
+    const candidates = Array.from(document.querySelectorAll('div')).filter(d=>{
+      const st = window.getComputedStyle(d);
+      try{ return parseInt(st.zIndex) > 1000000000 || (st.position==='fixed' && st.display!=='none' && d.clientWidth>200); }catch(e){ return false; }
+    });
+    return candidates[0] || null;
+  }
+
+  function install(){
+    const root = findAdminRoot();
+    if(!root){
+      let retries = 0;
+      const t = setInterval(()=>{
+        const r = findAdminRoot();
+        if(r){ clearInterval(t); injectControls(r); }
+        retries++;
+        if(retries>40){ clearInterval(t); console.log('AdminPW: admin root not found'); }
+      }, 250);
+    } else {
+      injectControls(root);
+    }
+  }
+
+  if(document.readyState==='complete' || document.readyState==='interactive') install();
+  else document.addEventListener('DOMContentLoaded', install);
+
+  window.__AdminPW = { loadRemote, getLocalPlain, saveLocalPlain, isSessionVerified, setSessionVerified };
+
+})(); // end password module
