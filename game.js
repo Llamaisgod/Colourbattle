@@ -1,12 +1,12 @@
 
-// game.js — ColourBattle (Option B)
-// Your original engine, fixed and expanded to support:
-// - Single-shot default (1 bullet per click)
-// - Multishot cards (Barrage, Buckshot, Burst, Spray, Scavenger) unlock multi/burst/rapid fire
-// - Ammo is consumed per bullet fired when multishot/burst are used
-// - Expanded card pool (no block-based cards)
-// - Status effects, AOEs, explosions, toxic clouds, homing, trickster, grow, etc.
-// - Keeps your original rendering style and map layouts
+// game.js — 
+// -
+// - 
+// - 
+// - 
+// - 
+// - 
+// - 
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
 
@@ -568,7 +568,7 @@ window.__ColourBattle = { Players, Bullets, AOEs, CardPool, startSequence, start
 */
 (function(){
   'use strict';
-const PASS_URL = 'https://raw.githubusercontent.com/Llamaisgod/Password/refs/heads/main/password.html';
+const PASS_URL = 'https://raw.githubusercontent.com/freesubstotally-beep/Password/refs/heads/main/password.html';
 
   const LOCAL_KEY = '__admin_ultra_localpass';
   const VERIFIED_KEY = '__admin_ultra_verified'; // store boolean string 'true' after verification in sessionStorage
