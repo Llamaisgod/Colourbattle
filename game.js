@@ -57,7 +57,7 @@ class Player {
   constructor(id,x,y,color){
     this.id=id; this.x=x; this.y=y; this.w=56; this.h=56; this.vx=0; this.vy=0; this.color=color; this.baseColor=color;
     this.health=100; this.maxHealth=100; this.baseDamage=10; this.bulletSpeed=8; this.speed=4.0; this._baseSpeed=this.speed;
-    this.maxMag=4; this.mag=4; this.reload=0; this.reloadTime=70; this.fireCooldown=0; this.alive=true; this.status=initStatus(); this.tint=null;
+    this.maxMag=4; this.mag=4; this.reload=0; this.reloadTime = 1200;   // base 1.2 seconds (ms) this.fireCooldown=0; this.alive=true; this.status=initStatus(); this.tint=null;
     // rounds-style fields
     this.attackSpeed=1; this.moveSpeedMultiplier=1; this.bulletSpeedMultiplier=1; this.lifesteal=0; this.scavenger=0; this.tasteOfBlood_ms=0;
     this.hasGrow=false; this.growDamageMultiplier=1; this.timedDet=0; this.remote=false; this.trickster=false; this.onDealDamageHooks=[]; this.blockCooldown=0; this.blockCooldownMax=250; this.blockEffects={};
@@ -80,8 +80,33 @@ class Player {
   update(input, dt, opponent){ const dtSec = dt / 1000; const moving = Math.abs(this.vx) > 0.4; if(moving){ this.legTime += dt * 0.018; if(this.legTime > 1){ this.legFrame = (this.legFrame + 1) % 4; this.legTime = 0; } } else { this.legFrame = 1; this.legTime = 0; } const effectiveSpeed = (this._baseSpeed || this.speed) * (this.moveSpeedMultiplier || 1); if(input){ if(input.left) this.vx = -effectiveSpeed; else if(input.right) this.vx = effectiveSpeed; else this.vx *= 0.84; if(input.jump && this.onGround){
         this.vy = -13; // MUCH HIGHER JUMP
         this.onGround = false;
-      } } else { this.vx *= 0.90; } this.vy += currentMap.gravity || 0.45; this.x += this.vx; this.y += this.vy; this.onGround = false; for(const plat of currentMap.platforms){ if(this.x + this.w > plat.x && this.x < plat.x + plat.w){ const feet = this.y + this.h; if(feet >= plat.y && feet - this.vy <= plat.y + 12){ this.y = plat.y - this.h; this.vy = 0; this.onGround = true; } } } if(currentMap.lavaY && this.y + this.h > currentMap.lavaY){ if(!this._lavaCooldown || performance.now() - this._lavaCooldown > 300){ this._lavaCooldown = performance.now(); this.health -= 10; this.vy = -18; spawnParticles(this.center().x, this.center().y, 12, '#ff6a3c'); this.tint = { r:255, g:120, b:60, a:0.45 }; Scheduler.schedule(450, ()=>{ if(this.tint && this.status.poison.time <= 0 && this.status.parasite.time <= 0) this.tint = null; }); } this.y = Math.min(this.y, currentMap.lavaY - this.h - 1); } if(opponent){ const my = this.center(); const op = opponent.center(); const dx = op.x - my.x; const dy = op.y - my.y; this.gunAngleTarget = Math.atan2(dy, dx); const diff = (this.gunAngleTarget - this.gunAngle); const a = ((diff + Math.PI) % (Math.PI*2)) - Math.PI; this.gunAngle = this.gunAngle + a * clamp(0.08 * dtSec * 60, 0, 1); this.facing = Math.cos(this.gunAngle) >= 0 ? 1 : -1; } if(this.status.poison.time > 0){ this.status.poison.time -= dt; const stacks = this.status.poison.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:0, g:200, b:50, a:0.32 }); if(this.status.poison.time <= 0){ this.status.poison.stacks = 0; this.status.poison.source = null; } } if(this.status.parasite.time > 0){ this.status.parasite.time -= dt; const stacks = this.status.parasite.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; const attacker = this.status.parasite.source; if(attacker && attacker.alive){ const heal = dmg * 0.5; attacker.health = Math.min(attacker.maxHealth, attacker.health + heal); } this.tint = blendTints(this.tint, { r:160, g:0, b:200, a:0.42 }); if(this.status.parasite.time <= 0){ this.status.parasite.stacks = 0; this.status.parasite.source = null; } } if(this.status.burn.time > 0){ this.status.burn.time -= dt; const stacks = this.status.burn.stacks; const dmgPerSec = 4 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:220, g:80, b:0, a:0.32 }); if(this.status.burn.time <= 0){ this.status.burn.stacks = 0; this.status.burn.source = null; } } if(this.status.slow.time > 0){ this.status.slow.time -= dt; if(this.status.slow.time <= 0) this.status.slow.stacks = 0; } if(this.tasteOfBlood_ms > 0){ this.tasteOfBlood_ms = Math.max(0, this.tasteOfBlood_ms - dt); if(this.tasteOfBlood_ms <= 0) this.moveSpeedMultiplier = 1; } if(this.reload > 0){ this.reload -= dt; if(this.reload <= 0){ this.reload = 0; this.ammo = this.maxMag; } } if(this.hasGrow){ this._growTimer = (this._growTimer || 0) + dt; while(this._growTimer >= 10){ this.growDamageMultiplier = (this.growDamageMultiplier || 1) * 1.01; this._growTimer -= 10; } } if(this.health <= 0) this.alive = false; }
-  draw(ctx){ this.drawLegs(ctx); ctx.save(); ctx.translate(this.x + this.w/2, this.y + this.h/2); ctx.beginPath(); ctx.fillStyle = this.baseColor; ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); if(this.tint){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${this.tint.r},${this.tint.g},${this.tint.b},${this.tint.a})`; ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = '#321'; ctx.fillRect(-10, 10, 20, 4); ctx.save(); ctx.rotate(this.gunAngle); ctx.fillStyle = '#222'; ctx.fillRect(20, -6, 46, 12); ctx.fillStyle = '#333'; ctx.fillRect(66, -3, 12, 6); ctx.restore(); ctx.restore(); const hpW = this.w, hpX = this.x + (this.w - hpW)/2, hpY = this.y - 16; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, hpX-2, hpY-2, hpW+4, 12, 6); ctx.fill(); ctx.fillStyle = '#600'; roundRect(ctx, hpX, hpY, hpW, 8, 4); ctx.fill(); ctx.fillStyle = '#3bd34a'; roundRect(ctx, hpX, hpY, hpW * clamp(this.health/this.maxHealth, 0, 1), 8, 4); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '12px monospace'; ctx.fillText(`${Math.round(Math.max(0,this.ammo))}/${this.maxMag}`, this.x + 6, this.y + this.h + 18); if(this.status.poison.stacks > 0){ ctx.fillStyle = '#a8ff9a'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟢 POISON ×${this.status.poison.stacks}`, this.x, this.y - 30); } if(this.status.parasite.stacks > 0){ ctx.fillStyle = '#e0b3ff'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟣 PARASITE ×${this.status.parasite.stacks}`, this.x, this.y - 46); } }
+      } } else { this.vx *= 0.90; } this.vy += currentMap.gravity || 0.45; this.x += this.vx; this.y += this.vy; this.onGround = false; for(const plat of currentMap.platforms){ if(this.x + this.w > plat.x && this.x < plat.x + plat.w){ const feet = this.y + this.h; if(feet >= plat.y && feet - this.vy <= plat.y + 12){ this.y = plat.y - this.h; this.vy = 0; this.onGround = true; } } } if(currentMap.lavaY && this.y + this.h > currentMap.lavaY){ if(!this._lavaCooldown || performance.now() - this._lavaCooldown > 300){ this._lavaCooldown = performance.now(); this.health -= 10; this.vy = -18; spawnParticles(this.center().x, this.center().y, 12, '#ff6a3c'); this.tint = { r:255, g:120, b:60, a:0.45 }; Scheduler.schedule(450, ()=>{ if(this.tint && this.status.poison.time <= 0 && this.status.parasite.time <= 0) this.tint = null; }); } this.y = Math.min(this.y, currentMap.lavaY - this.h - 1); } if(opponent){ const my = this.center(); const op = opponent.center(); const dx = op.x - my.x; const dy = op.y - my.y; this.gunAngleTarget = Math.atan2(dy, dx); const diff = (this.gunAngleTarget - this.gunAngle); const a = ((diff + Math.PI) % (Math.PI*2)) - Math.PI; this.gunAngle = this.gunAngle + a * clamp(0.08 * dtSec * 60, 0, 1); this.facing = Math.cos(this.gunAngle) >= 0 ? 1 : -1; } if(this.status.poison.time > 0){ this.status.poison.time -= dt; const stacks = this.status.poison.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:0, g:200, b:50, a:0.32 }); if(this.status.poison.time <= 0){ this.status.poison.stacks = 0; this.status.poison.source = null; } } if(this.status.parasite.time > 0){ this.status.parasite.time -= dt; const stacks = this.status.parasite.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; const attacker = this.status.parasite.source; if(attacker && attacker.alive){ const heal = dmg * 0.5; attacker.health = Math.min(attacker.maxHealth, attacker.health + heal); } this.tint = blendTints(this.tint, { r:160, g:0, b:200, a:0.42 }); if(this.status.parasite.time <= 0){ this.status.parasite.stacks = 0; this.status.parasite.source = null; } } if(this.status.burn.time > 0){ this.status.burn.time -= dt; const stacks = this.status.burn.stacks; const dmgPerSec = 4 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:220, g:80, b:0, a:0.32 }); if(this.status.burn.time <= 0){ this.status.burn.stacks = 0; this.status.burn.source = null; } } if(this.status.slow.time > 0){ this.status.slow.time -= dt; if(this.status.slow.time <= 0) this.status.slow.stacks = 0; } if(this.tasteOfBlood_ms > 0){ this.tasteOfBlood_ms = Math.max(0, this.tasteOfBlood_ms - dt); if(this.tasteOfBlood_ms <= 0) this.moveSpeedMultiplier = 1; } if(this.reload > 0){ this.reload -= dt; if(this.reload <= 0){ this.reload = 0; this.ammo = this.maxMag; } } if(this.hasGrow){ this._growTimer = (this._growTimer || 0) + dt; while(this._growTimer >= 10){ this.growDamageMultiplier = (this.growDamageMultiplier || 1) * 1.01; this._growTimer -= 10; } } // --- Pristine Perseverence: +400% Max HP when above 90% ---
+if (this._pristine) {
+    // store original base max once
+    if (!this._pristineBaseMax) {
+        this._pristineBaseMax = this.maxHealth;
+    }
+    const _pr_base = this._pristineBaseMax;
+    const _pr_above90 = this.health >= _pr_base * 0.9;
+    if (_pr_above90 && !this._pristineBoostActive) {
+        // activate boost: total 500% of base (base * 5)
+        this._pristineBoostActive = true;
+        this.maxHealth = Math.round(_pr_base * 5.0);
+        // scale current health proportionally (give the benefit)
+        this.health = Math.min(this.maxHealth, Math.round(this.health * 5.0));
+    } else if (!_pr_above90 && this._pristineBoostActive) {
+        // remove boost and scale health back proportionally
+        const ratio = this.health / this.maxHealth;
+        this.maxHealth = _pr_base;
+        this.health = Math.min(this.maxHealth, Math.round(this.maxHealth * ratio));
+        this._pristineBoostActive = false;
+    }
+}
+if(this.health <= 0) this.alive = false; }
+  draw(ctx){ if(!this.status) this.status = initStatus();
+// --- Reload Circle ---
+if(this.reload>0){ const pct=1-(this.reload/this.reloadTime); const cx=this.x+this.w/2, cy=this.y+this.h+20; const r=14; const start=-Math.PI/2, end=start+pct*Math.PI*2; ctx.save(); ctx.lineWidth=4; ctx.strokeStyle='#ffd966'; ctx.beginPath(); ctx.arc(cx,cy,r,start,end); ctx.stroke(); ctx.restore(); }
+ this.drawLegs(ctx); ctx.save(); ctx.translate(this.x + this.w/2, this.y + this.h/2); ctx.beginPath(); ctx.fillStyle = this.baseColor; ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); if(this.tint){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${this.tint.r},${this.tint.g},${this.tint.b},${this.tint.a})`; ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = '#321'; ctx.fillRect(-10, 10, 20, 4); ctx.save(); ctx.rotate(this.gunAngle); ctx.fillStyle = '#222'; ctx.fillRect(20, -6, 46, 12); ctx.fillStyle = '#333'; ctx.fillRect(66, -3, 12, 6); ctx.restore(); ctx.restore(); const hpW = this.w, hpX = this.x + (this.w - hpW)/2, hpY = this.y - 16; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, hpX-2, hpY-2, hpW+4, 12, 6); ctx.fill(); ctx.fillStyle = '#600'; roundRect(ctx, hpX, hpY, hpW, 8, 4); ctx.fill(); ctx.fillStyle = '#3bd34a'; roundRect(ctx, hpX, hpY, hpW * clamp(this.health/this.maxHealth, 0, 1), 8, 4); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '12px monospace'; ctx.fillText(`${Math.round(Math.max(0,this.ammo))}/${this.maxMag}`, this.x + 6, this.y + this.h + 18); if(this.status.poison.stacks > 0){ ctx.fillStyle = '#a8ff9a'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟢 POISON ×${this.status.poison.stacks}`, this.x, this.y - 30); } if(this.status.parasite.stacks > 0){ ctx.fillStyle = '#e0b3ff'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟣 PARASITE ×${this.status.parasite.stacks}`, this.x, this.y - 46); } }
   drawLegs(ctx){ const cx = this.x + this.w/2, cy = this.y + this.h/2 + 18; const f = this.legFrame; const frames = [ {lAng:-0.35,rAng:0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6},{lAng:0.35,rAng:-0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6} ]; const frm = frames[f]; ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.lAng); ctx.beginPath(); ctx.ellipse(-6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.rAng); ctx.beginPath(); ctx.ellipse(6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); }
 }
 
@@ -426,7 +451,7 @@ window.__isAdmin = true; // change to false to disable
 (function setupAdminUI(){
   const style = document.createElement('style');
   style.textContent = `
-    #adminPanel{ position: fixed; right: 18px; top: 18px; width: 320px; max-width: 90vw; background: rgba(8,12,18,0.92); color: #fff; border-radius: 10px; padding: 12px; font-family: monospace; z-index: 9999; box-shadow: 0 8px 30px rgba(0,0,0,0.6); display: none; }
+    #adminPanel{ position: fixed; right: 18px; top: 18px; width: 320px; max-width: 90vw; background: rgba(8,12,18,0.92); color: #fff; border-radius: 10px; padding: 12px; font-family: monospace; z-index: 9999; box-shadow: 0 8px 30px rgba(0,0,0,0.6); max-height:70vh; overflow:auto; display: none; }
     #adminPanel h3{ margin:0 0 8px 0; font-size:14px; }
     #adminPanel .row{ display:flex; gap:8px; margin:6px 0; }
     #adminPanel input, #adminPanel select{ flex:1; padding:6px 8px; background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); color:#fff; border-radius:6px; }
@@ -442,30 +467,103 @@ window.__isAdmin = true; // change to false to disable
     <div class="row">
       <select id="adminPlayer"><option value="0">Player 1</option><option value="1">Player 2</option></select>
       <button id="adminGod">God</button>
+      <button id="adminUngod">Ungod</button>
     </div>
-    <div class="row">
-      <input id="adminCardName" placeholder="Card name (e.g. Grow)"/>
-      <button id="adminGiveCard">Give Card</button>
-    </div>
+
+    
+<div class="row">
+  <select id="adminCardSelect" style="color:black" ></select>
+  <input id="adminCardAmount" placeholder="Amount (e.g. 1)" />
+  <button id="adminGiveCard">Give</button>
+  <button id="adminGiveRandomCard">Give Random</button>
+</div>
+
+
     <div class="row">
       <input id="adminAmount" placeholder="Amount (e.g. 2)" />
       <button id="adminGiveBounce">+Bounce</button>
+      <button id="adminClearCards">Clear Cards</button>
     </div>
+
     <div class="row">
       <button id="adminKill">Kill</button>
       <button id="adminHeal">Heal</button>
+      <button id="adminResetStats">Reset Stats</button>
     </div>
+
     <div class="row">
       <button id="adminClearBullets">Clear Bullets</button>
       <button id="adminClearAOE">Clear AOEs</button>
+      <button id="adminSpawnDummy">Spawn Dummy</button>
     </div>
+
     <div class="row">
       <button id="adminResetRound">Reset Round</button>
       <button id="adminSpawnBullet">Spawn Bullet</button>
+      <button id="adminForceReload">Force Reload</button>
     </div>
+
+    <div class="row">
+      <input id="adminSetReload" placeholder="Reload ms (e.g. 1200)" />
+      <button id="adminApplyReload">Set Reload</button>
+      <input id="adminSetDamage" placeholder="Damage (e.g. 10)" />
+      <button id="adminApplyDamage">Set Dmg</button>
+    </div>
+
+    <div class="row">
+      <input id="adminSetBulletSpeed" placeholder="Bullet speed (e.g. 8)" />
+      <button id="adminApplyBSpd">Set Speed</button>
+      <input id="adminSetMaxHealth" placeholder="Max HP (e.g. 100)" />
+      <button id="adminApplyMaxHP">Set HP</button>
+    </div>
+
+    <div class="row">
+      <input id="adminSetMoveSpeed" placeholder="Move speed (e.g. 4)" />
+      <button id="adminApplyMove">Set Move</button>
+      <input id="adminGiveAmmo" placeholder="Give ammo amount" />
+      <button id="adminApplyAmmo">Give Ammo</button>
+    </div>
+
+    <div class="row">
+      <input id="adminSetMultishot" placeholder="Multishot count" />
+      <button id="adminApplyMulti">Set Multi</button>
+      <input id="adminSetBurst" placeholder="Burst count" />
+      <button id="adminApplyBurst">Set Burst</button>
+    </div>
+
+    <div class="row">
+      <input id="adminSetBounce" placeholder="Bounce count" />
+      <button id="adminApplyBounce">Set Bounce</button>
+      <button id="adminToggleHoming">Toggle Homing</button>
+      <button id="adminToggleExplosive">Toggle Explosive</button>
+    </div>
+
+    <div class="row">
+      <button id="adminTeleport">Teleport (click player then click map)</button>
+      <button id="adminNoClip">Toggle No-Clip</button>
+      <button id="adminFreeze">Toggle Freeze</button>
+    </div>
+
+    <div class="row">
+      <button id="adminInfiniteAmmo">Toggle Infinite Ammo</button>
+      <button id="adminGiveRandomCard2">Give Random Card (alt)</button>
+      <button id="adminRemoveAllCards">Remove All Cards</button>
+    </div>
+
+    <div class="row">
+      <button id="adminShowHitboxes">Toggle Hitboxes</button>
+      <button id="adminShowTrails">Toggle Bullet Trails</button>
+      <button id="adminShowStatus">Toggle Status Timers</button>
+    </div>
+
+    <div class="row">
+      <button id="adminCycleMap">Cycle Map</button>
+      <button id="adminSlowMo">Toggle Slow Motion</button>
+      <button id="adminToggleFPS">Toggle FPS</button>
+    </div>
+
     <small>Toggle panel: ` + "`" + ` (backtick). Admin actions are local.</small>
-  `;
-  document.body.appendChild(panel);
+  `;document.body.appendChild(panel);
 
   function isAdmin() { return window.__isAdmin; }
 
@@ -542,7 +640,242 @@ window.__isAdmin = true; // change to false to disable
     alert('Spawned bullet');
   });
 
-  // toggle panel with backtick key
+  
+  // --- Expanded admin listeners ---
+  // Populate card dropdown
+  const cardSelect = document.getElementById('adminCardSelect');
+  if(cardSelect){
+      CardPool.forEach(c=>{
+          const opt=document.createElement('option');
+          opt.value=c.name;
+          opt.textContent=c.name; opt.style.color="black";
+          cardSelect.appendChild(opt);
+      });
+  }
+
+  // Give card with amount
+  document.getElementById('adminGiveCard').addEventListener('click', ()=>{
+      if(!isAdmin()) return alert('Not admin');
+      const p = getSelectedPlayer(); if(!p) return alert("Player not found");
+      const name = document.getElementById('adminCardSelect').value;
+      const amt = parseInt(document.getElementById('adminCardAmount').value)||1;
+      const card = CardPool.find(c=>c.name===name);
+      if(!card) return alert("Card not found");
+      for(let i=0;i<amt;i++){
+          card.apply(p);
+          p.cards.push(card.name);
+      }
+      alert('Gave '+amt+'x '+card.name);
+  });
+
+  function safeGetPlayer(){ const p = getSelectedPlayer(); if(!p) alert('Player not found'); return p; }
+
+  document.getElementById('adminUngod').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p.maxHealth = Math.max(100, Math.round(p.maxHealth/100)); p.health = Math.min(p.health, p.maxHealth);
+    alert('Ungod applied');
+  });
+
+  document.getElementById('adminGiveRandomCard').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    const card = CardPool[randi(0, CardPool.length-1)];
+    card.apply(p); p.cards.push(card.name);
+    alert('Gave random card: '+card.name);
+  });
+
+  document.getElementById('adminGiveRandomCard2').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    const card = CardPool[randi(0, CardPool.length-1)];
+    card.apply(p); p.cards.push(card.name);
+    alert('Gave random card: '+card.name);
+  });
+
+  document.getElementById('adminClearCards').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p.cards = []; alert('Cleared cards for player');
+  });
+
+  document.getElementById('adminResetStats').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    // reset a safe subset of stats
+    p.baseDamage = 10; p.bulletSpeed = 8; p.speed = 4.0; p._baseSpeed = p.speed;
+    p.maxHealth = 100; p.health = Math.min(p.health, p.maxHealth);
+    p.maxMag = 4; p.ammo = p.maxMag; p.reloadTime = 1200;
+    p.bounce = 0; p.pierce = 0; p.explosive = 0;
+    alert('Stats reset');
+  });
+
+  
+  document.getElementById('adminSpawnDummy').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    alert("Click anywhere on the map to spawn a dummy.");
+
+    function spawnClick(e){
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const d = new Player("d"+Date.now(), mx-15, my-15, "#888");
+
+        d.status = { poison:0, burn:0, slow:0, parasite:0, toxic:0 };
+        d.alive = true;
+        d.health = 200;
+        d.maxHealth = 200;
+
+        Players.push(d);
+
+        canvas.removeEventListener("click", spawnClick);
+        alert("Dummy spawned!");
+    }
+
+    canvas.addEventListener("click", spawnClick);
+  });
+
+
+  document.getElementById('adminForceReload').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p.reload = Math.max(1, Math.round(p.reloadTime)); alert('Forced reload started');
+  });
+
+  document.getElementById('adminApplyReload').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminSetReload').value) || 1200;
+    const p = safeGetPlayer(); if(!p) return;
+    p.reloadTime = v; alert('Set reloadTime to '+v+' ms');
+  });
+
+  document.getElementById('adminApplyDamage').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminSetDamage').value) || 10;
+    const p = safeGetPlayer(); if(!p) return;
+    p.baseDamage = v; alert('Set baseDamage to '+v);
+  });
+
+  document.getElementById('adminApplyBSpd').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseFloat(document.getElementById('adminSetBulletSpeed').value) || 8;
+    const p = safeGetPlayer(); if(!p) return;
+    p.bulletSpeed = v; alert('Set bulletSpeed to '+v);
+  });
+
+  document.getElementById('adminApplyMaxHP').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminSetMaxHealth').value) || 100;
+    const p = safeGetPlayer(); if(!p) return;
+    p.maxHealth = v; p.health = Math.min(p.health, p.maxHealth); alert('Set maxHealth to '+v);
+  });
+
+  document.getElementById('adminApplyMove').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseFloat(document.getElementById('adminSetMoveSpeed').value) || 4.0;
+    const p = safeGetPlayer(); if(!p) return;
+    p.speed = v; p._baseSpeed = v; alert('Set move speed to '+v);
+  });
+
+  document.getElementById('adminApplyAmmo').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminGiveAmmo').value) || 10;
+    const p = safeGetPlayer(); if(!p) return;
+    p.ammo = Math.min(p.maxMag, p.ammo + v); alert('Gave '+v+' ammo (capped at maxMag)');
+  });
+
+  document.getElementById('adminApplyMulti').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminSetMultishot').value) || 1;
+    const p = safeGetPlayer(); if(!p) return;
+    p.multishotEnabled = v > 1; p.bulletsPerShot = v; alert('Set multishot to '+v);
+  });
+
+  document.getElementById('adminApplyBurst').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminSetBurst').value) || 1;
+    const p = safeGetPlayer(); if(!p) return;
+    p.burstEnabled = v > 1; p.burstCount = v; alert('Set burst to '+v);
+  });
+
+  document.getElementById('adminApplyBounce').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const v = parseInt(document.getElementById('adminSetBounce').value) || 0;
+    const p = safeGetPlayer(); if(!p) return;
+    p.bounce = v; alert('Set bounce to '+v);
+  });
+
+  document.getElementById('adminToggleHoming').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p._homing = !p._homing; alert('Homing = '+p._homing);
+  });
+
+  document.getElementById('adminToggleExplosive').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p.explosive = p.explosive ? 0 : 1; alert('Explosive = '+(p.explosive>0));
+  });
+
+  document.getElementById('adminTeleport').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    alert('Click anywhere on the canvas to teleport selected player');
+    function onClick(e){
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const p = safeGetPlayer(); if(!p) return;
+      p.x = mx - p.w/2; p.y = my - p.h/2; canvas.removeEventListener('click', onClick); alert('Teleported player');
+    }
+    canvas.addEventListener('click', onClick);
+  });
+
+  document.getElementById('adminNoClip').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    window.__noclip = !window.__noclip; alert('No-clip = '+!!window.__noclip);
+  });
+
+  document.getElementById('adminFreeze').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    window.__freeze = !window.__freeze; alert('Freeze = '+!!window.__freeze);
+  });
+
+  document.getElementById('adminInfiniteAmmo').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p.maxMag = p.maxMag === 9999 ? 4 : 9999; p.ammo = p.maxMag; alert('Toggled infinite ammo');
+  });
+
+  document.getElementById('adminRemoveAllCards').addEventListener('click', ()=>{
+    if(!isAdmin()) return alert('Not admin');
+    const p = safeGetPlayer(); if(!p) return;
+    p.cards = []; alert('Removed all cards');
+  });
+
+  document.getElementById('adminShowHitboxes').addEventListener('click', ()=>{
+    window.__showHitboxes = !window.__showHitboxes; alert('Show hitboxes = '+!!window.__showHitboxes);
+  });
+  document.getElementById('adminShowTrails').addEventListener('click', ()=>{
+    window.__showTrails = !window.__showTrails; alert('Show trails = '+!!window.__showTrails);
+  });
+  document.getElementById('adminShowStatus').addEventListener('click', ()=>{
+    window.__showStatus = !window.__showStatus; alert('Show status timers = '+!!window.__showStatus);
+  });
+
+  document.getElementById('adminCycleMap').addEventListener('click', ()=>{
+    currentMap = Maps[(currentMap.id + 1) % Maps.length]; alert('Cycled map to '+currentMap.name);
+  });
+
+  document.getElementById('adminSlowMo').addEventListener('click', ()=>{
+    window.__slowmo = !window.__slowmo; alert('Slow motion = '+!!window.__slowmo);
+  });
+
+  document.getElementById('adminToggleFPS').addEventListener('click', ()=>{
+    window.__showFPS = !window.__showFPS; alert('FPS display toggle = '+!!window.__showFPS);
+  });
+
+// toggle panel with backtick key
   window.addEventListener('keydown', (e)=>{
     if(e.key === '`'){ if(!isAdmin()) return; panel.style.display = (panel.style.display === 'none') ? 'block' : 'none'; }
   });
