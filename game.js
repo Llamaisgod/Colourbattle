@@ -1,12 +1,6 @@
 
 // game.js — 
-// -
-// - 
-// - 
-// - 
-// - 
-// - 
-// - 
+
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
 
