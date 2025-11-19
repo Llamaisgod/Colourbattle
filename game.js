@@ -4,7 +4,6 @@
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
 
-/* --------------------- Canvas & utils --------------------- */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
 let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
@@ -15,7 +14,6 @@ const rand = (a,b=0)=> b===0 ? Math.random()*a : a + Math.random()*(b-a);
 const randi = (a,b)=> Math.floor(rand(a,b));
 const dist = (x1,y1,x2,y2)=> Math.hypot(x1-x2,y1-y2);
 
-/* --------------------- Input --------------------- */
 const keys = {}; let keyPress = {}; const mouse = { x:0, y:0, down:false };
 window.addEventListener('keydown', e=>{ if(!keys[e.key]) keyPress[e.key]=true; keys[e.key]=true; });
 window.addEventListener('keyup', e=>{ keys[e.key]=false; });
@@ -23,13 +21,9 @@ window.addEventListener('mousemove', e=>{ mouse.x = e.clientX; mouse.y = e.clien
 window.addEventListener('mousedown', e=>{ mouse.down = true; });
 window.addEventListener('mouseup', e=>{ mouse.down = false; });
 
-/* --------------------- Timing & scheduler --------------------- */
 let lastTime = performance.now(), fps = 0, frames = 0, fpsTimer = 0;
 const Scheduler = { tasks: [], schedule(delay, fn){ this.tasks.push({runAt: performance.now()+delay, fn}); }, update(){ const now = performance.now(); for(let i=this.tasks.length-1;i>=0;i--){ if(now >= this.tasks[i].runAt){ try{ this.tasks[i].fn(); }catch(e){ console.error(e); } this.tasks.splice(i,1); } } } };
 
-        
-
-/* --------------------- Maps --------------------- */
 const MapTemplates = [
   { id:0, name:'Training Grounds', platforms:[ {cx:0.25,cy:0.72,wFrac:0.24,h:28},{cx:0.75,cy:0.72,wFrac:0.24,h:28},{cx:0.5,cy:0.48,wFrac:0.26,h:28}], spawnA:{cx:0.2,cy:0.5}, spawnB:{cx:0.8,cy:0.5} },
   { id:1, name:'Sky Islands', platforms:[ {cx:0.18,cy:0.66,wFrac:0.2,h:20},{cx:0.5,cy:0.5,wFrac:0.22,h:20},{cx:0.82,cy:0.66,wFrac:0.2,h:20}], spawnA:{cx:0.18,cy:0.46}, spawnB:{cx:0.82,cy:0.46} },
@@ -39,20 +33,17 @@ let Maps = [], currentMap = null;
 function rebuildMapsAndCenter(){ Maps = MapTemplates.map(t=>{ const platforms = t.platforms.map(p=>{ const w = Math.max(80, Math.round(p.wFrac * W)); const h = p.h; const x = Math.round(p.cx * W - w/2); const y = Math.round(p.cy * H - h/2); return {x,y,w,h}; }); const spawnA = { x: Math.round(t.spawnA.cx * W), y: Math.round(t.spawnA.cy * H) }; const spawnB = { x: Math.round(t.spawnB.cx * W), y: Math.round(t.spawnB.cy * H) }; const map = { id:t.id, name:t.name, platforms, spawnA, spawnB, gravity:0.45, lavaY: H - 80 }; const minX = Math.min(...platforms.map(p=>p.x)); const maxX = Math.max(...platforms.map(p=>p.x + p.w)); const groupCenter = (minX + maxX)/2; const dx = Math.round(W/2 - groupCenter); platforms.forEach(p=> p.x += dx); spawnA.x += dx; spawnB.x += dx; return map; }); currentMap = Maps[0]; }
 rebuildMapsAndCenter();
 
-/* --------------------- Entities & helpers --------------------- */
 let Players = [], Bullets = [], Particles = [], AOEs = [];
 function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function spawnParticles(x,y,n,color){ for(let i=0;i<n;i++) Particles.push({ x,y, vx: rand(-3,3), vy: rand(-6,-1), life: randi(18,40), color }); }
 function wrapText(ctx,text,maxW){ if(!text) return ['']; const words=text.split(' '); const lines=[]; let line=''; for(let i=0;i<words.length;i++){ const test=line+words[i]+' '; if(ctx.measureText(test).width>maxW && line.length>0){ lines.push(line.trim()); line = words[i]+' '; } else line = test; } if(line.length) lines.push(line.trim()); return lines; }
 function blendTints(a,b){ if(!a) return {...b}; if(!b) return {...a}; const oa = (a.a||0), ob = (b.a||0); const w = oa+ob || 1; return { r: Math.round((a.r*oa + b.r*ob)/w), g: Math.round((a.g*oa + b.g*ob)/w), b: Math.round((a.b*oa + b.b*ob)/w), a: Math.min(0.9, oa+ob) }; }
 
-/* --------------------- Status system --------------------- */
 function initStatus(){ return { poison: { stacks:0, time:0, source:null }, parasite: { stacks:0, time:0, source:null }, burn: { stacks:0, time:0, source:null }, slow: { stacks:0, time:0 }, stun: { time:0 }, silence: { time:0 }, shield: { value:0, time:0 } }; }
 function applyPoisonTo(target, stacks, source){ target.status.poison.stacks += stacks; target.status.poison.time = Math.max(target.status.poison.time, 2000); target.status.poison.source = source; }
 function applyParasiteTo(target, stacks, source){ target.status.parasite.stacks += stacks; target.status.parasite.time = Math.max(target.status.parasite.time, 2000); target.status.parasite.source = source; }
 function applyBurnTo(target, stacks, source){ target.status.burn.stacks += stacks; target.status.burn.time = Math.max(target.status.burn.time, 3000); target.status.burn.source = source; }
 
-/* --------------------- Player class --------------------- */
 class Player {
   constructor(id,x,y,color){
     this.id=id; this.x=x; this.y=y; this.w=56; this.h=56; this.vx=0; this.vy=0; this.color=color; this.baseColor=color;
@@ -110,7 +101,6 @@ if(this.reload>0){ const pct=1-(this.reload/this.reloadTime); const cx=this.x+th
   drawLegs(ctx){ const cx = this.x + this.w/2, cy = this.y + this.h/2 + 18; const f = this.legFrame; const frames = [ {lAng:-0.35,rAng:0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6},{lAng:0.35,rAng:-0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6} ]; const frm = frames[f]; ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.lAng); ctx.beginPath(); ctx.ellipse(-6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.rAng); ctx.beginPath(); ctx.ellipse(6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); }
 }
 
-/* --------------------- Bullet & AOE classes --------------------- */
 
 class Bullet {
   constructor(x,y,vx,vy,owner,opts={}){
@@ -274,7 +264,7 @@ function applyDamageToTarget(target, rawDmg, owner){ if(!target) return; if(owne
 /* --------------------- bullet collision (extended) --------------------- */
 function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner); if(b.thruster){ const dirx=(p.center().x-b.x)/Math.max(1,d); const diry=(p.center().y-b.y)/Math.max(1,d); p.vx += dirx * 2.2; p.vy += diry * 1.6; } if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); if(b.pierces>0) b.pierces--; else return true; } } } if(b.life <=0) return true; return false; }
 
-/* --------------------- Card Pool (no block cards) --------------------- */
+/* --------------------- Card Pool --------------------- */
 const CardPool = [
   { name:'Barrage', desc:'Fire many bullets at once. (+5 bullets/shot) -70% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+5; p.baseDamage = Math.round((p.baseDamage||10)*0.30); p.maxMag += 5; p.ammo = p.maxMag; } },
   { name:'Buckshot', desc:'Shotgun style shot (+6 pellets) -60% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+6; p.baseDamage = Math.round((p.baseDamage||10)*0.4); p.spread = (p.spread||0)+0.25; } },
@@ -387,7 +377,7 @@ function endRound(winner) {
 }
 
 
-/* --------------------- Shooting system (single-shot default, multishot if cards) --------------------- */
+/* --------------------- Shooting system  --------------------- */
 function fireSingleBullet(player, angleOffset=0){ if(!player || !player.alive) return; const GUN_LENGTH = 50;
   const muzzleX = player.center().x + Math.cos(player.gunAngle + angleOffset) * GUN_LENGTH; const muzzleY = player.center().y + Math.sin(player.gunAngle + angleOffset) * GUN_LENGTH; const speed = (player.bulletSpeed || 8) * (player.bulletSpeedMultiplier || 1); const vx = Math.cos(player.gunAngle + angleOffset) * speed * (0.96 + Math.random()*0.08); const vy = Math.sin(player.gunAngle + angleOffset) * speed * (0.96 + Math.random()*0.08); const damage = Math.max(1, Math.round((player.baseDamage || 6) * (player.growDamageMultiplier || 1))); const b = new Bullet(muzzleX + rand(-3,3), muzzleY + rand(-3,3), vx, vy, player, { damage });
   if (player.timedDet) Bombs.push(new Bomb(muzzleX, muzzleY, b.damage, player)); b.explosive = player.explosive || 0; b.timedDet = player.timedDet || 0; b.homing = player._homing || false; b.remote = player.remote || false; b.growMultiplier = player.growDamageMultiplier || 1; b.trickster = player.trickster || false; b.thruster = player._thruster || false; b.sneaky = player._sneaky || false; Bullets.push(b); }
@@ -413,7 +403,7 @@ function tryFire(player){ if(!player.alive) return; if(player.reload > 0) return
   if(player.ammo <= 0){ player.reload = Math.max(1, Math.round(player.reloadTime)); }
 }
 
-/* --------------------- Input handling for firing (enforces one-shot-per-click unless cards) --------------------- */
+/* --------------------- Input handling for firing --------------------- */
 document.addEventListener('keydown', e=>{ if(!keys[e.key]) keyPress[e.key]=true; keys[e.key]=true; if(e.key==='Tab') e.preventDefault(); if(pickState && pickState.active && ['1','2','3','4','5'].includes(e.key)){ const idx=parseInt(e.key)-1; const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; if(pickState.options[idx]){ player.applyCard(pickState.options[idx]); pickState.active=false; pickState.chosen=pickState.options[idx]; setTimeout(()=> showNextPick(),220); } } });
 document.addEventListener('keyup', e=>{ keys[e.key]=false; });
 canvas.addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
@@ -445,7 +435,7 @@ function render(){ drawMap(ctx); for(const a of AOEs) a.draw(ctx);
 
 
 
-/* --------------------- Admin GUI (toggle with ` key) --------------------- */
+/* --------------------- Admin GUI  --------------------- */
 // Simple admin panel — accessible locally. Player 1 is treated as admin by default.
 window.__isAdmin = true; // change to false to disable
 (function setupAdminUI(){
