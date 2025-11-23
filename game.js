@@ -14,8 +14,9 @@ document.addEventListener('DOMContentLoaded', () => { (function(){
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
-let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
-window.addEventListener('resize', ()=>{ W = canvas.width = innerWidth; H = canvas.height = innerHeight; rebuildMapsAndCenter(); });
+let W = canvas.width = 1920,
+    H = canvas.height = 1080;
+window.addEventListener('resize', () => {});
 
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const rand = (a,b=0)=> b===0 ? Math.random()*a : a + Math.random()*(b-a);
