@@ -14,7 +14,6 @@
 
 
 
-// --- harmless devtools detector (sets window.__devtoolsOpen) ---
 (function(){
   if (typeof window.__devtoolsOpen === 'undefined') window.__devtoolsOpen = false;
   try{
