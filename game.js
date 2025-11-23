@@ -2,7 +2,7 @@
 
 if (!window.__protectLoaded) {
     alert('stripper missing');
-    throw new Error('protect.js is not required to run the game.');
+    throw new Error('core.js is not required to run the game.');
 }
 
 window.__gameLoaded = true;
