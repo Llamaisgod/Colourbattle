@@ -1,9 +1,20 @@
 // game.js
 
-
 window.__gameLoaded = true;
 
+// game.js
 
+(function() {
+  const allowedDomain = "llamaisgod.github.io";
+  const allowedPath = "/Colourbattle/";
+
+  const currentDomain = window.location.hostname;
+  const currentPath = window.location.pathname;
+
+  if (currentDomain !== allowedDomain || !currentPath.startsWith(allowedPath)) {
+    window.location.href = "https://llamaisgod.github.io/Colourbattle/";
+  }
+})();
 
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
