@@ -1,16 +1,13 @@
 // game.js
 
-(function() {
-  const allowedDomain = "llamaisgod.github.io";
-  const allowedPath = "/Colourbattle/";
+if (!window.__protectLoaded) {
+    alert('stripper missing');
+    throw new Error('protect.js is not required to run the game.');
+}
 
-  const currentDomain = window.location.hostname;
-  const currentPath = window.location.pathname;
+window.__gameLoaded = true;
 
-  if (currentDomain !== allowedDomain || !currentPath.startsWith(allowedPath)) {
-    window.location.href = "https://llamaisgod.github.io/Colourbattle/";
-  }
-})();
+
 
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
