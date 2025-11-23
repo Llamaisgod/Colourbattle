@@ -1,9 +1,5 @@
 // game.js
 
-window.__gameLoaded = true;
-
-// game.js
-
 (function() {
   const allowedDomain = "llamaisgod.github.io";
   const allowedPath = "/Colourbattle/";
@@ -16,6 +12,35 @@ window.__gameLoaded = true;
   }
 })();
 
+
+
+// --- harmless devtools detector (sets window.__devtoolsOpen) ---
+(function(){
+  if (typeof window.__devtoolsOpen === 'undefined') window.__devtoolsOpen = false;
+  try{
+    const threshold = 160;
+    function checkDevtools(){
+      try{
+        if (window.outerWidth - window.innerWidth > threshold || window.outerHeight - window.innerHeight > threshold){
+          window.__devtoolsOpen = true;
+        }
+      }catch(e){}
+    }
+    setInterval(checkDevtools, 800);
+    // simple non-destructive debugger detection
+    let cnt=0;
+    function detectDebugger(){
+      const start = Date.now();
+      // eslint-disable-next-line no-debugger
+      debugger;
+      const delta = Date.now() - start;
+      if(delta > 50) window.__devtoolsOpen = true;
+      cnt++;
+      if(cnt < 3) setTimeout(detectDebugger, 1200);
+    }
+    setTimeout(detectDebugger, 1500);
+  }catch(e){}
+})();
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
 
@@ -570,7 +595,9 @@ window.__isAdmin = true; // change to false to disable
     <small>Toggle panel: ` + "`" + ` (backtick). Admin actions are local.</small>
   `;document.body.appendChild(panel);
 
-  function isAdmin() { return window.__isAdmin; }
+  
+    try{ window.__adminPanelLoaded = true; document.dispatchEvent(new Event('adminpanel:loaded')); }catch(e){}
+function isAdmin() { return window.__isAdmin; }
 
   function getSelectedPlayer(){
     const idx = parseInt(document.getElementById('adminPlayer').value) || 0;
@@ -955,6 +982,8 @@ const PASS_URL = 'https://raw.githubusercontent.com/freesubstotally-beep/Passwor
     if(root.querySelector('#adm_pw_container')) return;
     const container = document.createElement('div');
     container.id = 'adm_pw_container';
+    // original injectControls continues...
+
     container.style.cssText = 'margin-bottom:8px;padding:6px;border-radius:6px;background:rgba(255,255,255,0.02);display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
     container.innerHTML = `
       <label style="font-size:13px;color:#cfe">Admin password:
@@ -1040,9 +1069,44 @@ const PASS_URL = 'https://raw.githubusercontent.com/freesubstotally-beep/Passwor
     return candidates[0] || null;
   }
 
-  function install(){
+  
+
+  // --- injectDecoyControls: harmless fake password UI shown when devtools detected ---
+  function injectDecoyControls(root){
+    try{
+      if(!root) return;
+      if(root.querySelector('#adm_pw_container')) return;
+      const container = document.createElement('div');
+      container.id = 'adm_pw_container';
+      container.style.cssText = 'margin-bottom:8px;padding:6px;border-radius:6px;background:rgba(255,255,255,0.02);display:flex;gap:8px;align-items:center;flex-wrap:wrap;';
+      container.innerHTML = `
+        <label style="font-size:13px;color:#cfe">Admin password:
+          <input id="adm_pw_input" type="password" placeholder="password" style="margin-left:6px;padding:4px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.03);color:#dff">
+        </label>
+        <button id="adm_pw_unlock" data-admin-pass-exempt="true" style="padding:6px;border-radius:6px;cursor:pointer">Unlock</button>
+        <span id="adm_pw_status" style="font-size:12px;opacity:0.9;margin-left:8px;color:#bff"></span>
+      `;
+      root.insertBefore(container, root.firstChild);
+      // make buttons do nothing meaningful (decoy)
+      const input = container.querySelector('#adm_pw_input');
+      const btnUnlock = container.querySelector('#adm_pw_unlock');
+      const status = container.querySelector('#adm_pw_status');
+      btnUnlock.addEventListener('click', ()=>{
+        status.textContent = 'Attempt logged';
+        // fake small animation
+        btnUnlock.disabled = true;
+        setTimeout(()=>{ btnUnlock.disabled = false; status.textContent = ''; }, 1200);
+      });
+    }catch(e){}
+  }
+function install(){
     const root = findAdminRoot();
     if(!root){
+      // wait for admin panel and decide whether to show real or decoy controls
+      try{
+        if(window.__devtoolsOpen){ injectDecoyControls(root); return; }
+      }catch(e){}
+
       let retries = 0;
       const t = setInterval(()=>{
         const r = findAdminRoot();
@@ -1055,9 +1119,12 @@ const PASS_URL = 'https://raw.githubusercontent.com/freesubstotally-beep/Passwor
     }
   }
 
-  if(document.readyState==='complete' || document.readyState==='interactive') install();
-  else document.addEventListener('DOMContentLoaded', install);
-
-  window.__AdminPW = { loadRemote, getLocalPlain, saveLocalPlain, isSessionVerified, setSessionVerified };
+  /* wait for admin panel to be ready before injecting password controls */
+    if (window.__adminPanelLoaded) {
+      install();
+    } else {
+      document.addEventListener('adminpanel:loaded', function _onAdminPanelLoaded(){ install(); document.removeEventListener('adminpanel:loaded', _onAdminPanelLoaded); });
+    }
+window.__AdminPW = { loadRemote, getLocalPlain, saveLocalPlain, isSessionVerified, setSessionVerified };
 
 })(); // end password module
