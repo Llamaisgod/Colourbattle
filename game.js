@@ -6,8 +6,16 @@ document.addEventListener('DOMContentLoaded', () => { (function(){
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
-let W = canvas.width = 1920,
-    H = canvas.height = 1080;
+// DPR-aware sizing to keep text crisp on high-DPR displays
+const DPR = Math.max(1, window.devicePixelRatio || 1);
+canvas.style.width = '1920px';
+canvas.style.height = '1080px';
+canvas.width = Math.round(1920 * DPR);
+canvas.height = Math.round(1080 * DPR);
+// scale the drawing context so all drawing coordinates remain in CSS pixels (1920x1080)
+ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+let W = 1920,
+    H = 1080;
 window.addEventListener('resize', () => {});
 
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
@@ -283,49 +291,49 @@ function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of 
 
 /* --------------------- Card Pool --------------------- */
 const CardPool = [
-  { name:'Barrage', desc:'Fire many bullets at once. (+5 bullets/shot) -70% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+5; p.baseDamage = Math.round((p.baseDamage||10)*0.30); p.maxMag += 5; p.ammo = p.maxMag; } },
-  { name:'Buckshot', desc:'Shotgun style shot (+6 pellets) -60% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+6; p.baseDamage = Math.round((p.baseDamage||10)*0.4); p.spread = (p.spread||0)+0.25; } },
-  { name:'Burst', desc:'3-round burst (-60% dmg)', apply(p){ p.burstEnabled=true; p.burstCount=3; p.burstDelay=60; p.baseDamage = Math.round((p.baseDamage||10)*0.4); } },
-  { name:'Spray', desc:'High firerate (+12 ammo, -75% dmg)', apply(p){ p.rapidFireEnabled=true; p.attackSpeed = (p.attackSpeed||1)*10; p.maxMag += 12; p.ammo = p.maxMag; p.baseDamage = Math.round((p.baseDamage||10)*0.25); } },
-  { name:'Scavenger', desc:'Dealing damage reloads your weapon (restore ammo on hit)', apply(p){ p.reloadOnHit = true; p.scavenger = 1; } },
+  { name:'Barrage', lavaYFrac:0.85, desc:'Fire many bullets at once. (+5 bullets/shot) -70% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+5; p.baseDamage = Math.round((p.baseDamage||10)*0.30); p.maxMag += 5; p.ammo = p.maxMag; } },
+  { name:'Buckshot', lavaYFrac:0.85, desc:'Shotgun style shot (+6 pellets) -60% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+6; p.baseDamage = Math.round((p.baseDamage||10)*0.4); p.spread = (p.spread||0)+0.25; } },
+  { name:'Burst', lavaYFrac:0.85, desc:'3-round burst (-60% dmg)', apply(p){ p.burstEnabled=true; p.burstCount=3; p.burstDelay=60; p.baseDamage = Math.round((p.baseDamage||10)*0.4); } },
+  { name:'Spray', lavaYFrac:0.85, desc:'High firerate (+12 ammo, -75% dmg)', apply(p){ p.rapidFireEnabled=true; p.attackSpeed = (p.attackSpeed||1)*10; p.maxMag += 12; p.ammo = p.maxMag; p.baseDamage = Math.round((p.baseDamage||10)*0.25); } },
+  { name:'Scavenger', lavaYFrac:0.85, desc:'Dealing damage reloads your weapon (restore ammo on hit)', apply(p){ p.reloadOnHit = true; p.scavenger = 1; } },
 
-  { name:'Big bullets', desc:'Bigger bullets (slight damage up)', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*1.12); } },
-  { name:'Bombs Away', desc:'Spawn bombs around you when specific condition triggers', apply(p){ p._bombsAway = true; p.maxHealth = Math.round((p.maxHealth||100) * 1.15); p.ammo = p.maxMag; } },
-  { name:'Bouncy', desc:'+2 bounces; +25% damage', apply(p){ p.bounce = (p.bounce||0)+2; p.baseDamage = Math.round((p.baseDamage||10)*1.25); } },
-  { name:'Brawler', desc:'+200% HP 3s after hitting', apply(p){ p._brawler=true; } },
-  { name:'Careful Planning', desc:'+100% damage; -150% atkspd', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.attackSpeed *= 0.4; } },
-  { name:'Chase', desc:'+60% move toward opponent; +30% HP', apply(p){ p.moveSpeedMultiplier = Math.max(p.moveSpeedMultiplier,1.0); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.maxHealth, p.health); p._chase = true; } },
-  { name:'Chilling Presence', desc:'Slow nearby enemies; +25% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.maxHealth, p.health); p._chillPresence = true; } },
-  { name:'Cold Bullets', desc:'+70% slow on hit', apply(p){ p._coldBullets = true; } },
-  { name:'Combine', desc:'+100% dmg; -2 ammo', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxMag = Math.max(1, (p.maxMag||4)-2); p.ammo = Math.min(p.ammo, p.maxMag); } },
-  { name:'Dazzle', desc:'Bullets stun enemies on hit', apply(p){ p._dazzle=true; } },
-  { name:'Decay', desc:'Damage to you is dealt over 4s; +50% HP', apply(p){ p._decay=true; p.maxHealth = Math.round(p.maxHealth * 1.5); p.health = Math.min(p.maxHealth, p.health); } },
-  { name:'Defender', desc:'More HP and little cooldown shaves (non-block variant)', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Demonic Pact', desc:'Shooting costs HP; removes shooting cooldown; more ammo', apply(p){ p._demonicPact=true; p.maxMag = (p.maxMag||4)+9; p.ammo = p.maxMag; } },
-  { name:'Drill Ammo', desc:'Bullets pierce more targets', apply(p){ p.pierce = (p.pierce||0)+7; } },
-  { name:'Dazzle', desc:'Bullets stun the opponent multiple times', apply(p){ p._dazzle=true; } },
-  { name:'Glass Cannon', desc:'+100% dmg; -100% HP', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxHealth = Math.max(6, Math.round(p.maxHealth * 0.01)); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Grow', desc:'Bullets gain damage over travel', apply(p){ p.hasGrow=true; } },
-  { name:'Homing', desc:'Bullets home toward targets; -25% dmg', apply(p){ p._homing=true; p.baseDamage = Math.round((p.baseDamage||10)*0.75); } },
-  { name:'Huge', desc:'+80% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.8); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Leech', desc:'+75% lifesteal; +30% HP', apply(p){ p.lifesteal = Math.max(p.lifesteal, 0.75); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Lifestealer', desc:'Heal by proximity to enemy; +25% HP', apply(p){ p._lifestealer=true; p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Mayhem', desc:'+5 bounces; -15% dmg', apply(p){ p.bounce = (p.bounce||0) + 5; p.baseDamage = Math.round((p.baseDamage||10)*0.85); } },
-  { name:'Parasite', desc:'Parasite shots heal you (50% of DoT)', apply(p){ p.parasiteStacks = (p.parasiteStacks||0) + 1; } },
-  { name:'Phoenix', desc:'Respawn once on death (one-time)', apply(p){ p.canRevive=true; p.maxHealth = Math.round(p.maxHealth * 0.65); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Poison', desc:'Poison shots (stacking)', apply(p){ p.poisonStacks = (p.poisonStacks||0) + 1; } },
-  { name:'Pristine Perseverence', desc:'+400% HP when above 90% HP', apply(p){ p._pristine=true; } },
-  { name:'Quick Reload', desc:'-70% reload time', apply(p){ p.reloadTime = Math.max(8, Math.round((p.reloadTime||70) * 0.30)); } },
-  { name:'Quick Shot', desc:'+150% bullet speed', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.5; p.reloadTime += 250; } },
-  { name:'Steady Shot', desc:'+40% HP; +100% bullet speed', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.4); p.bulletSpeed = (p.bulletSpeed||8) * 2.0; } },
-  { name:'Tank', desc:'+100% HP; -25% ATKSPD', apply(p){ p.maxHealth = Math.round(p.maxHealth * 2.0); p.attackSpeed *= 0.75; } },
-  { name:'Target Bounce', desc:'+1 bounce; bullets aim for visible targets when bouncing', apply(p){ p.targetBounce = true; p.bounce = (p.bounce||0) + 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
-  { name:'Taste of Blood', desc:'+50% movement speed for 3s after dealing damage; +30% lifesteal', apply(p){ p._tasteOfBloodActive = true; p.lifesteal = Math.max(p.lifesteal, 0.30); } },
-  { name:'Thruster', desc:'Bullets push targets on hit', apply(p){ p._thruster = true; } },
-  { name:'Timed Detonation', desc:'Bullets spawn bombs after 0.5s', apply(p){ p.timedDet = 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.85); } },
-  { name:'Toxic Cloud', desc:'Bullets spawn poison cloud on impact', apply(p){ p.toxicCloud = true; p.attackSpeed *= 0.8; } },
-  { name:'Trickster', desc:'+2 bounces; damage buff per bounce', apply(p){ p.trickster = true; p.bounce = (p.bounce||0) + 2; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
-  { name:'Wind Up', desc:'+100% bullet speed; +60% damage; heavy attack penalty', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.0; p.baseDamage = Math.round((p.baseDamage||10) * 1.6); p.attackSpeed *= 0.5; } }
+  { name:'Big bullets', lavaYFrac:0.85, desc:'Bigger bullets (slight damage up)', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*1.12); } },
+  { name:'Bombs Away', lavaYFrac:0.85, desc:'Spawn bombs around you when specific condition triggers', apply(p){ p._bombsAway = true; p.maxHealth = Math.round((p.maxHealth||100) * 1.15); p.ammo = p.maxMag; } },
+  { name:'Bouncy', lavaYFrac:0.85, desc:'+2 bounces; +25% damage', apply(p){ p.bounce = (p.bounce||0)+2; p.baseDamage = Math.round((p.baseDamage||10)*1.25); } },
+  { name:'Brawler', lavaYFrac:0.85, desc:'+200% HP 3s after hitting', apply(p){ p._brawler=true; } },
+  { name:'Careful Planning', lavaYFrac:0.85, desc:'+100% damage; -150% atkspd', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.attackSpeed *= 0.4; } },
+  { name:'Chase', lavaYFrac:0.85, desc:'+60% move toward opponent; +30% HP', apply(p){ p.moveSpeedMultiplier = Math.max(p.moveSpeedMultiplier,1.0); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.maxHealth, p.health); p._chase = true; } },
+  { name:'Chilling Presence', lavaYFrac:0.85, desc:'Slow nearby enemies; +25% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.maxHealth, p.health); p._chillPresence = true; } },
+  { name:'Cold Bullets', lavaYFrac:0.85, desc:'+70% slow on hit', apply(p){ p._coldBullets = true; } },
+  { name:'Combine', lavaYFrac:0.85, desc:'+100% dmg; -2 ammo', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxMag = Math.max(1, (p.maxMag||4)-2); p.ammo = Math.min(p.ammo, p.maxMag); } },
+  { name:'Dazzle', lavaYFrac:0.85, desc:'Bullets stun enemies on hit', apply(p){ p._dazzle=true; } },
+  { name:'Decay', lavaYFrac:0.85, desc:'Damage to you is dealt over 4s; +50% HP', apply(p){ p._decay=true; p.maxHealth = Math.round(p.maxHealth * 1.5); p.health = Math.min(p.maxHealth, p.health); } },
+  { name:'Defender', lavaYFrac:0.85, desc:'More HP and little cooldown shaves (non-block variant)', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Demonic Pact', lavaYFrac:0.85, desc:'Shooting costs HP; removes shooting cooldown; more ammo', apply(p){ p._demonicPact=true; p.maxMag = (p.maxMag||4)+9; p.ammo = p.maxMag; } },
+  { name:'Drill Ammo', lavaYFrac:0.85, desc:'Bullets pierce more targets', apply(p){ p.pierce = (p.pierce||0)+7; } },
+  { name:'Dazzle', lavaYFrac:0.85, desc:'Bullets stun the opponent multiple times', apply(p){ p._dazzle=true; } },
+  { name:'Glass Cannon', lavaYFrac:0.85, desc:'+100% dmg; -100% HP', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxHealth = Math.max(6, Math.round(p.maxHealth * 0.01)); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Grow', lavaYFrac:0.85, desc:'Bullets gain damage over travel', apply(p){ p.hasGrow=true; } },
+  { name:'Homing', lavaYFrac:0.85, desc:'Bullets home toward targets; -25% dmg', apply(p){ p._homing=true; p.baseDamage = Math.round((p.baseDamage||10)*0.75); } },
+  { name:'Huge', lavaYFrac:0.85, desc:'+80% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.8); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Leech', lavaYFrac:0.85, desc:'+75% lifesteal; +30% HP', apply(p){ p.lifesteal = Math.max(p.lifesteal, 0.75); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Lifestealer', lavaYFrac:0.85, desc:'Heal by proximity to enemy; +25% HP', apply(p){ p._lifestealer=true; p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Mayhem', lavaYFrac:0.85, desc:'+5 bounces; -15% dmg', apply(p){ p.bounce = (p.bounce||0) + 5; p.baseDamage = Math.round((p.baseDamage||10)*0.85); } },
+  { name:'Parasite', lavaYFrac:0.85, desc:'Parasite shots heal you (50% of DoT)', apply(p){ p.parasiteStacks = (p.parasiteStacks||0) + 1; } },
+  { name:'Phoenix', lavaYFrac:0.85, desc:'Respawn once on death (one-time)', apply(p){ p.canRevive=true; p.maxHealth = Math.round(p.maxHealth * 0.65); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Poison', lavaYFrac:0.85, desc:'Poison shots (stacking)', apply(p){ p.poisonStacks = (p.poisonStacks||0) + 1; } },
+  { name:'Pristine Perseverence', lavaYFrac:0.85, desc:'+400% HP when above 90% HP', apply(p){ p._pristine=true; } },
+  { name:'Quick Reload', lavaYFrac:0.85, desc:'-70% reload time', apply(p){ p.reloadTime = Math.max(8, Math.round((p.reloadTime||70) * 0.30)); } },
+  { name:'Quick Shot', lavaYFrac:0.85, desc:'+150% bullet speed', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.5; p.reloadTime += 250; } },
+  { name:'Steady Shot', lavaYFrac:0.85, desc:'+40% HP; +100% bullet speed', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.4); p.bulletSpeed = (p.bulletSpeed||8) * 2.0; } },
+  { name:'Tank', lavaYFrac:0.85, desc:'+100% HP; -25% ATKSPD', apply(p){ p.maxHealth = Math.round(p.maxHealth * 2.0); p.attackSpeed *= 0.75; } },
+  { name:'Target Bounce', lavaYFrac:0.85, desc:'+1 bounce; bullets aim for visible targets when bouncing', apply(p){ p.targetBounce = true; p.bounce = (p.bounce||0) + 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
+  { name:'Taste of Blood', lavaYFrac:0.85, desc:'+50% movement speed for 3s after dealing damage; +30% lifesteal', apply(p){ p._tasteOfBloodActive = true; p.lifesteal = Math.max(p.lifesteal, 0.30); } },
+  { name:'Thruster', lavaYFrac:0.85, desc:'Bullets push targets on hit', apply(p){ p._thruster = true; } },
+  { name:'Timed Detonation', lavaYFrac:0.85, desc:'Bullets spawn bombs after 0.5s', apply(p){ p.timedDet = 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.85); } },
+  { name:'Toxic Cloud', lavaYFrac:0.85, desc:'Bullets spawn poison cloud on impact', apply(p){ p.toxicCloud = true; p.attackSpeed *= 0.8; } },
+  { name:'Trickster', lavaYFrac:0.85, desc:'+2 bounces; damage buff per bounce', apply(p){ p.trickster = true; p.bounce = (p.bounce||0) + 2; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
+  { name:'Wind Up', lavaYFrac:0.85, desc:'+100% bullet speed; +60% damage; heavy attack penalty', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.0; p.baseDamage = Math.round((p.baseDamage||10) * 1.6); p.attackSpeed *= 0.5; } }
 ];
 
 /* --------------------- Pick system (always 5 options) --------------------- */
@@ -423,8 +431,8 @@ function tryFire(player){ if(!player.alive) return; if(player.reload > 0) return
 /* --------------------- Input handling for firing --------------------- */
 document.addEventListener('keydown', e=>{ if(!keys[e.key]) keyPress[e.key]=true; keys[e.key]=true; if(e.key==='Tab') e.preventDefault(); if(pickState && pickState.active && ['1','2','3','4','5'].includes(e.key)){ const idx=parseInt(e.key)-1; const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; if(pickState.options[idx]){ player.applyCard(pickState.options[idx]); pickState.active=false; pickState.chosen=pickState.options[idx]; setTimeout(()=> showNextPick(),220); } } });
 document.addEventListener('keyup', e=>{ keys[e.key]=false; });
-canvas.addEventListener('mousemove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; });
-canvas.addEventListener('mousedown', e=>{ mouse.down=true; if(showSplash) startSequence(); if(pickState && pickState.active){ const mx=e.clientX, my=e.clientY; const boxW=Math.min(W*0.92,960), boxH=Math.min(H*0.78,360); const bx=(W-boxW)/2, by=(H-boxH)/2; const cardW=(boxW-80)/5, cardH=boxH-100; for(let i=0;i<pickState.options.length;i++){ const cx=bx + 40 + i*cardW, cy=by + 60; if(mx>=cx && mx<=cx+cardW && my>=cy && my<=cy+cardH){ const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; player.applyCard(pickState.options[i]); pickState.active=false; pickState.chosen=pickState.options[i]; spawnParticles(mx,my,20,'#ffd27a'); setTimeout(()=> showNextPick(),280); break; } } } });
+canvas.addEventListener('mousemove', e=>{ const rect = canvas.getBoundingClientRect(); mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top; });
+canvas.addEventListener('mousedown', e=>{ mouse.down=true; if(showSplash) startSequence(); if(pickState && pickState.active){ const rect = canvas.getBoundingClientRect(); const mx = e.clientX - rect.left; const my = e.clientY - rect.top; const boxW=Math.min(W*0.92,960), boxH=Math.min(H*0.78,360); const bx=(W-boxW)/2, by=(H-boxH)/2; const cardW=(boxW-80)/5, cardH=boxH-100; for(let i=0;i<pickState.options.length;i++){ const cx=bx + 40 + i*cardW, cy=by + 60; if(mx>=cx && mx<=cx+cardW && my>=cy && my<=cy+cardH){ const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; player.applyCard(pickState.options[i]); pickState.active=false; pickState.chosen=pickState.options[i]; spawnParticles(mx,my,20,'#ffd27a'); setTimeout(()=> showNextPick(),280); break; } } } });
 canvas.addEventListener('mouseup', e=>{ mouse.down=false; });
 function startSequence(){ started=true; showSplash=false; awaitingPicks=['p1','p2']; pickState.active=false; setTimeout(()=> showNextPick(),120); }
 
