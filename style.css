@@ -1,35 +1,24 @@
 html, body {
-  height: 100%;
-  margin: 0;
-  background: #071022;
-  overflow: hidden;
-  font-family: Inter, Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+    background: #000;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
 }
 
-canvas {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-  margin-top: 0;
-  margin-bottom: 0;
-  width: 1920px;
-  height: 1080px;
-  background: #000;
+#gameCanvas {
+    width: 1920px !important;
+    height: 1080px !important;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: calc(50vh - 540px);
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
 }
 
-/* HUD tweaks */
-.perk {
-  font-size: 12px;
-  color: #fff;
+* {
+    touch-action: none;
+    user-select: none;
 }
-.perk-list {
-  position: absolute;
-  left: 12px;
-  top: 62px;
-  max-width: 280px;
-}
-
-/* prevent text selection while playing */
-* { user-select: none; -webkit-user-select: none; }
