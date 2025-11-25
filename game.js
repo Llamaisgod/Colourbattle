@@ -26,9 +26,9 @@ let lastTime = performance.now(), fps = 0, frames = 0, fpsTimer = 0;
 const Scheduler = { tasks: [], schedule(delay, fn){ this.tasks.push({runAt: performance.now()+delay, fn}); }, update(){ const now = performance.now(); for(let i=this.tasks.length-1;i>=0;i--){ if(now >= this.tasks[i].runAt){ try{ this.tasks[i].fn(); }catch(e){ console.error(e); } this.tasks.splice(i,1); } } } };
 
 const MapTemplates = [
-  { id:0, name:'Training Grounds', platforms:[ {cx:0.25,cy:0.72,wFrac:0.24,h:28},{cx:0.75,cy:0.72,wFrac:0.24,h:28},{cx:0.5,cy:0.48,wFrac:0.26,h:28}], spawnA:{cx:0.2,cy:0.5}, spawnB:{cx:0.8,cy:0.5} },
-  { id:1, name:'Sky Islands', platforms:[ {cx:0.18,cy:0.66,wFrac:0.2,h:20},{cx:0.5,cy:0.5,wFrac:0.22,h:20},{cx:0.82,cy:0.66,wFrac:0.2,h:20}], spawnA:{cx:0.18,cy:0.46}, spawnB:{cx:0.82,cy:0.46} },
-  { id:2, name:'Lava Pit', platforms:[ {cx:0.25,cy:0.70,wFrac:0.26,h:26},{cx:0.75,cy:0.70,wFrac:0.26,h:26}], spawnA:{cx:0.2,cy:0.48}, spawnB:{cx:0.8,cy:0.48}, lavaYFrac:0.9 }
+  { id:0, name:'Training Grounds', platforms:[ {cx:0.25,cy:0.72,wFrac:0.24,h:28, lavaYFrac: 0.9 },{cx:0.75,cy:0.72,wFrac:0.24,h:28},{cx:0.5,cy:0.48,wFrac:0.26,h:28}], spawnA:{cx:0.2,cy:0.5}, spawnB:{cx:0.8,cy:0.5} },
+  { id:1, name:'Sky Islands', platforms:[ {cx:0.18,cy:0.66,wFrac:0.2,h:20, lavaYFrac: 0.9 },{cx:0.5,cy:0.5,wFrac:0.22,h:20},{cx:0.82,cy:0.66,wFrac:0.2,h:20}], spawnA:{cx:0.18,cy:0.46}, spawnB:{cx:0.82,cy:0.46} },
+  { id:2, name:'Lava Pit', platforms:[ {cx:0.25,cy:0.70,wFrac:0.26,h:26, lavaYFrac: 0.9 },{cx:0.75,cy:0.70,wFrac:0.26,h:26}], spawnA:{cx:0.2,cy:0.48}, spawnB:{cx:0.8,cy:0.48}, lavaYFrac:0.9 }
 ];
 let Maps = [], currentMap = null;
 function rebuildMapsAndCenter(){ Maps = MapTemplates.map(t=>{ const platforms = t.platforms.map(p=>{ const w = Math.max(80, Math.round(p.wFrac * W)); const h = p.h; const x = Math.round(p.cx * W - w/2); const y = Math.round(p.cy * H - h/2); return {x,y,w,h}; }); const spawnA = { x: Math.round(t.spawnA.cx * W), y: Math.round(t.spawnA.cy * H) }; const spawnB = { x: Math.round(t.spawnB.cx * W), y: Math.round(t.spawnB.cy * H) }; const map = { id:t.id, name:t.name, platforms, spawnA, spawnB, gravity:0.45, lavaY: t.lavaYFrac ? Math.round(t.lavaYFrac * H) : null }; const minX = Math.min(...platforms.map(p=>p.x)); const maxX = Math.max(...platforms.map(p=>p.x + p.w)); const groupCenter = (minX + maxX)/2; const dx = Math.round(W/2 - groupCenter); platforms.forEach(p=> p.x += dx); spawnA.x += dx; spawnB.x += dx; return map; }); currentMap = Maps[0]; }
