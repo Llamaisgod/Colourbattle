@@ -1,11 +1,14 @@
 // game.js
 
+window.__gameLoaded = true;
+
 document.addEventListener('DOMContentLoaded', () => { (function(){
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
-let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
-window.addEventListener('resize', ()=>{ W = canvas.width = innerWidth; H = canvas.height = innerHeight; rebuildMapsAndCenter(); });
+let W = canvas.width = 1920,
+    H = canvas.height = 1080;
+window.addEventListener('resize', () => {});
 
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const rand = (a,b=0)=> b===0 ? Math.random()*a : a + Math.random()*(b-a);
@@ -23,22 +26,23 @@ let lastTime = performance.now(), fps = 0, frames = 0, fpsTimer = 0;
 const Scheduler = { tasks: [], schedule(delay, fn){ this.tasks.push({runAt: performance.now()+delay, fn}); }, update(){ const now = performance.now(); for(let i=this.tasks.length-1;i>=0;i--){ if(now >= this.tasks[i].runAt){ try{ this.tasks[i].fn(); }catch(e){ console.error(e); } this.tasks.splice(i,1); } } } };
 
 const MapTemplates = [
-  { id:0, name:'Training Grounds', platforms:[ {cx:0.25,cy:0.72,wFrac:0.24,h:28},{cx:0.75,cy:0.72,wFrac:0.24,h:28},{cx:0.5,cy:0.48,wFrac:0.26,h:28}], spawnA:{cx:0.2,cy:0.5}, spawnB:{cx:0.8,cy:0.5} },
-  { id:1, name:'Sky Islands', platforms:[ {cx:0.18,cy:0.66,wFrac:0.2,h:20},{cx:0.5,cy:0.5,wFrac:0.22,h:20},{cx:0.82,cy:0.66,wFrac:0.2,h:20}], spawnA:{cx:0.18,cy:0.46}, spawnB:{cx:0.82,cy:0.46} },
-  { id:2, name:'Lava Pit', platforms:[ {cx:0.25,cy:0.70,wFrac:0.26,h:26},{cx:0.75,cy:0.70,wFrac:0.26,h:26}], spawnA:{cx:0.2,cy:0.48}, spawnB:{cx:0.8,cy:0.48}, lavaYFrac:0.9 }
+  // Note: lavaYFrac defines where lava starts as fraction of canvas height
+
+  { id:0, name:'Training Grounds', platforms:[ {cx:0.25,cy:0.72,wFrac:0.24,h:28, lavaYFrac: 0.9 },{cx:0.75,cy:0.72,wFrac:0.24,h:28},{cx:0.5,cy:0.48,wFrac:0.26,h:28}], spawnA:{cx:0.2,cy:0.5}, spawnB:{cx:0.8,cy:0.5} },
+  { id:1, name:'Sky Islands', platforms:[ {cx:0.18,cy:0.66,wFrac:0.2,h:20, lavaYFrac: 0.9 },{cx:0.5,cy:0.5,wFrac:0.22,h:20},{cx:0.82,cy:0.66,wFrac:0.2,h:20}], spawnA:{cx:0.18,cy:0.46}, spawnB:{cx:0.82,cy:0.46} },
+  { id:2, name:'Lava Pit', platforms:[ {cx:0.25,cy:0.70,wFrac:0.26,h:26, lavaYFrac: 0.9 },{cx:0.75,cy:0.70,wFrac:0.26,h:26}], spawnA:{cx:0.2,cy:0.48}, spawnB:{cx:0.8,cy:0.48}, lavaYFrac:0.9 }
 ];
 let Maps = [], currentMap = null;
-function rebuildMapsAndCenter(){ Maps = MapTemplates.map(t=>{ const platforms = t.platforms.map(p=>{ const w = Math.max(80, Math.round(p.wFrac * W)); const h = p.h; const x = Math.round(p.cx * W - w/2); const y = Math.round(p.cy * H - h/2); return {x,y,w,h}; }); const spawnA = { x: Math.round(t.spawnA.cx * W), y: Math.round(t.spawnA.cy * H) }; const spawnB = { x: Math.round(t.spawnB.cx * W), y: Math.round(t.spawnB.cy * H) }; const map = { id:t.id, name:t.name, platforms, spawnA, spawnB, gravity:0.45, lavaY: H - 80 }; const minX = Math.min(...platforms.map(p=>p.x)); const maxX = Math.max(...platforms.map(p=>p.x + p.w)); const groupCenter = (minX + maxX)/2; const dx = Math.round(W/2 - groupCenter); platforms.forEach(p=> p.x += dx); spawnA.x += dx; spawnB.x += dx; return map; }); currentMap = Maps[0]; }
+function rebuildMapsAndCenter(){ Maps = MapTemplates.map(t=>{ const platforms = t.platforms.map(p=>{ const w = Math.max(80, Math.round(p.wFrac * W)); const h = p.h; const x = Math.round(p.cx * W - w/2); const y = Math.round(p.cy * H - h/2); return {x,y,w,h}; }); const spawnA = { x: Math.round(t.spawnA.cx * W), y: Math.round(t.spawnA.cy * H) }; const spawnB = { x: Math.round(t.spawnB.cx * W), y: Math.round(t.spawnB.cy * H) }; const map = { id:t.id, name:t.name, platforms, spawnA, spawnB, gravity:0.45, lavaY: t.lavaYFrac ? Math.round(t.lavaYFrac * H) : null }; const minX = Math.min(...platforms.map(p=>p.x)); const maxX = Math.max(...platforms.map(p=>p.x + p.w)); const groupCenter = (minX + maxX)/2; const dx = Math.round(W/2 - groupCenter); platforms.forEach(p=> p.x += dx); spawnA.x += dx; spawnB.x += dx; return map; }); currentMap = Maps[0]; }
 rebuildMapsAndCenter();
 
 let Players = [], Bullets = [], Particles = [], AOEs = [];
 function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function spawnParticles(x,y,n,color){ for(let i=0;i<n;i++) Particles.push({ x,y, vx: rand(-3,3), vy: rand(-6,-1), life: randi(18,40), color }); }
 function wrapText(ctx,text,maxW){ if(!text) return ['']; const words=text.split(' '); const lines=[]; let line=''; for(let i=0;i<words.length;i++){ const test=line+words[i]+' '; if(ctx.measureText(test).width>maxW && line.length>0){ lines.push(line.trim()); line = words[i]+' '; } else line = test; } if(line.length) lines.push(line.trim()); return lines; }
-function blendTints(a,b){ if(!a) return {...b}; if(!b) return {...a}; const oa = (a.a||0), ob = (b.a||0); const w = oa+ob || 1; return { r: Math.round((a.r*oa + b.r*ob)/w), g: Math.round((a.g*oa + b.g*ob)/w), b: Math.round((a.b*oa + b.b*ob)/w), a: Math.min(0.9, oa+ob) }; }
+function blendTints(a,b){ if(!a) return Object.assign({}, b); if(!b) return Object.assign({}, a); const oa = (a.a||0), ob = (b.a||0); const w = oa+ob || 1; return { r: Math.round((a.r*oa + b.r*ob)/w), g: Math.round((a.g*oa + b.g*ob)/w), b: Math.round((a.b*oa + b.b*ob)/w), a: Math.min(0.9, oa+ob) }; }
 
-function initStatus(){ return {
-    stun: { time:0 }, poison: { stacks:0, time:0, source:null }, parasite: { stacks:0, time:0, source:null }, burn: { stacks:0, time:0, source:null }, slow: { stacks:0, time:0 }, stun: { time:0 }, silence: { time:0 }, shield: { value:0, time:0 } }; }
+function initStatus(){ return { poison: { stacks:0, time:0, source:null }, parasite: { stacks:0, time:0, source:null }, burn: { stacks:0, time:0, source:null }, slow: { stacks:0, time:0 }, stun: { time:0 }, silence: { time:0 }, shield: { value:0, time:0 } }; }
 function applyPoisonTo(target, stacks, source){ target.status.poison.stacks += stacks; target.status.poison.time = Math.max(target.status.poison.time, 2000); target.status.poison.source = source; }
 function applyParasiteTo(target, stacks, source){ target.status.parasite.stacks += stacks; target.status.parasite.time = Math.max(target.status.parasite.time, 2000); target.status.parasite.source = source; }
 function applyBurnTo(target, stacks, source){ target.status.burn.stacks += stacks; target.status.burn.time = Math.max(target.status.burn.time, 3000); target.status.burn.source = source; }
@@ -96,11 +100,10 @@ if(this.health <= 0) this.alive = false; }
   draw(ctx){ if(!this.status) this.status = initStatus();
 // --- Reload Circle ---
 if(this.reload>0){ const pct=1-(this.reload/this.reloadTime); const cx=this.x+this.w/2, cy=this.y+this.h+20; const r=14; const start=-Math.PI/2, end=start+pct*Math.PI*2; ctx.save(); ctx.lineWidth=4; ctx.strokeStyle='#ffd966'; ctx.beginPath(); ctx.arc(cx,cy,r,start,end); ctx.stroke(); ctx.restore(); }
- this.drawLegs(ctx); ctx.save(); ctx.translate(this.x + this.w/2, this.y + this.h/2); ctx.beginPath(); ctx.fillStyle = this.baseColor; ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); if(this.tint){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${this.tint.r},${this.tint.g},${this.tint.b},${this.tint.a})`; ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = '#321'; ctx.fillRect(-10, 10, 20, 4); ctx.save(); ctx.rotate(this.gunAngle); ctx.fillStyle = '#222'; ctx.fillRect(20, -6, 46, 12); ctx.fillStyle = '#333'; ctx.fillRect(66, -3, 12, 6); ctx.restore(); ctx.restore(); const hpW = this.w, hpX = this.x + (this.w - hpW)/2, hpY = this.y - 16; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, hpX-2, hpY-2, hpW+4, 12, 6); ctx.fill(); ctx.fillStyle = '#600'; roundRect(ctx, hpX, hpY, hpW, 8, 4); ctx.fill(); let hpColor = '#3bd34a';
-if (this._pristine && this._pristineBoostActive) hpColor = '#4aa8ff';
-ctx.fillStyle = hpColor; roundRect(ctx, hpX, hpY, hpW * clamp(this.health/this.maxHealth, 0, 1), 8, 4); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '12px monospace'; ctx.fillText(`${Math.round(Math.max(0,this.ammo))}/${this.maxMag}`, this.x + 6, this.y + this.h + 18); if(this.status.poison.stacks > 0){ ctx.fillStyle = '#a8ff9a'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟢 POISON ×${this.status.poison.stacks}`, this.x, this.y - 30); } if(this.status.parasite.stacks > 0){ ctx.fillStyle = '#e0b3ff'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟣 PARASITE ×${this.status.parasite.stacks}`, this.x, this.y - 46); } }
+ this.drawLegs(ctx); ctx.save(); ctx.translate(this.x + this.w/2, this.y + this.h/2); ctx.beginPath(); ctx.fillStyle = this.baseColor; ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); if(this.tint){ ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(${this.tint.r},${this.tint.g},${this.tint.b},${this.tint.a})`; ctx.beginPath(); ctx.ellipse(0,0,this.w/2,this.h/2,0,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(8,-8,4,4,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle = '#321'; ctx.fillRect(-10, 10, 20, 4); ctx.save(); ctx.rotate(this.gunAngle); ctx.fillStyle = '#222'; ctx.fillRect(20, -6, 46, 12); ctx.fillStyle = '#333'; ctx.fillRect(66, -3, 12, 6); ctx.restore(); ctx.restore(); const hpW = this.w, hpX = this.x + (this.w - hpW)/2, hpY = this.y - 16; ctx.fillStyle = 'rgba(0,0,0,0.45)'; roundRect(ctx, hpX-2, hpY-2, hpW+4, 12, 6); ctx.fill(); ctx.fillStyle = '#600'; roundRect(ctx, hpX, hpY, hpW, 8, 4); ctx.fill(); ctx.fillStyle = '#3bd34a'; roundRect(ctx, hpX, hpY, hpW * clamp(this.health/this.maxHealth, 0, 1), 8, 4); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = '12px monospace'; ctx.fillText(`${Math.round(Math.max(0,this.ammo))}/${this.maxMag}`, this.x + 6, this.y + this.h + 18); if(this.status.poison.stacks > 0){ ctx.fillStyle = '#a8ff9a'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟢 POISON ×${this.status.poison.stacks}`, this.x, this.y - 30); } if(this.status.parasite.stacks > 0){ ctx.fillStyle = '#e0b3ff'; ctx.font = '12px Inter, Arial'; ctx.fillText(`🟣 PARASITE ×${this.status.parasite.stacks}`, this.x, this.y - 46); } }
   drawLegs(ctx){ const cx = this.x + this.w/2, cy = this.y + this.h/2 + 18; const f = this.legFrame; const frames = [ {lAng:-0.35,rAng:0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6},{lAng:0.35,rAng:-0.35,spread:12},{lAng:0.0,rAng:0.0,spread:6} ]; const frm = frames[f]; ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.lAng); ctx.beginPath(); ctx.ellipse(-6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); ctx.save(); ctx.translate(cx, cy); ctx.rotate(frm.rAng); ctx.beginPath(); ctx.ellipse(6, 6, 8, 18, 0, 0, Math.PI*2); ctx.fillStyle = '#2b2b2b'; ctx.fill(); ctx.restore(); }
 }
+
 
 class Bullet {
   constructor(x,y,vx,vy,owner,opts={}){
@@ -221,7 +224,9 @@ class Bullet {
   }
 }
 
+
 class AOE { constructor(x,y,r,ttl,type,meta={}){ this.x=x; this.y=y; this.r=r; this.ttl=ttl; this.type=type; this.meta=meta; this.created=performance.now(); } update(){ return (performance.now() - this.created) < this.ttl; } draw(ctx){ if(this.type === 'toxic'){ ctx.globalAlpha=0.16; ctx.fillStyle='#3aa84a'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } else if(this.type === 'explosion'){ ctx.globalAlpha=0.16; ctx.fillStyle='#ffd27a'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } else if(this.type === 'emp'){ ctx.globalAlpha=0.12; ctx.fillStyle='#9be7ff'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } else if(this.type === 'saw'){ ctx.globalAlpha=0.18; ctx.fillStyle='#d6b5ff'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } else if(this.type==='radiance'){ ctx.globalAlpha=0.16; ctx.fillStyle='#ffd27a'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } else { ctx.globalAlpha=0.12; ctx.fillStyle='#8ad0ff'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } } }
+
 
 class Bomb {
     constructor(x, y, damage, owner) {
@@ -260,24 +265,21 @@ function createToxicCloud(x,y,damage,owner){ const base=70; const radius = Math.
 function applyDamageToTarget(target, rawDmg, owner){ if(!target) return; if(owner && owner._decay){ applyBurnTo(target,1,owner); try{ owner._onDealDamage && owner._onDealDamage(1); }catch(e){} return; } if(typeof target.takeDamage === 'function'){ target.takeDamage(rawDmg, owner); } else { target.health -= rawDmg; } try{ owner && owner._onDealDamage && owner._onDealDamage(rawDmg); }catch(e){ console.error(e); } }
 
 /* --------------------- bullet collision (extended) --------------------- */
-function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; 
-// Timed Detonation: trigger on bounce
-if (b.owner && b.owner.timedDet) {
-    Bombs.push(new Bomb(b.x, b.y, b.damage, b.owner));
-}
-if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
-// Timed Detonation: trigger on player hit
-if (b.owner && b.owner.timedDet) {
-    Bombs.push(new Bomb(b.x, b.y, b.damage, b.owner));
-}
-
-            // DAZZLE: freeze enemy on hit (1s per Dazzle card)
+function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
+            // DAZZLE: stacked stun (0.5s per Dazzle card) + particle burst
             if (b.owner && b.owner._dazzle) {
                 try {
                     const dazzleCount = (b.owner.cards && b.owner.cards.filter(c => c === 'Dazzle').length) || 1;
-                    p.status.stun.time = Math.max(p.status.stun.time || 0, dazzleCount * 1000);
-                } catch(e) { /* ignore */ }
-            } if(b.thruster){ const dirx=(p.center().x-b.x)/Math.max(1,d); const diry=(p.center().y-b.y)/Math.max(1,d); p.vx += dirx * 2.2; p.vy += diry * 1.6; } if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); if(b.pierces>0) b.pierces--; else return true; } } } if(b.life <=0) return true; return false; }
+                    const stunTime = dazzleCount * 500; // milliseconds
+                    p.status.stun.time = Math.max(p.status.stun.time || 0, stunTime);
+                } catch (e) { /* ignore */ }
+                // particles: purple flash and white sparks
+                try {
+                    spawnParticles(b.x, b.y, 10, 'rgba(180,0,255,0.95)');
+                    spawnParticles(b.x, b.y, 6, '#ffffff');
+                } catch (e) {}
+            }
+    if(b.thruster){ const dirx=(p.center().x-b.x)/Math.max(1,d); const diry=(p.center().y-b.y)/Math.max(1,d); p.vx += dirx * 2.2; p.vy += diry * 1.6; } if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); if(b.pierces>0) b.pierces--; else return true; } } } if(b.life <=0) return true; return false; }
 
 /* --------------------- Card Pool --------------------- */
 const CardPool = [
@@ -335,6 +337,7 @@ function showNextPick(){ if(awaitingPicks.length === 0){ pickState.active=false;
 let started=false, showSplash=true, inRound=false, roundNumber=1; let scores={p1:0,p2:0}, TARGET_SCORE=5;
 function startRound(){ currentMap = Maps[randi(0,Maps.length-1)]; Players[0].respawnAt(currentMap.spawnA); Players[1].respawnAt(currentMap.spawnB); Players.forEach(p=>{ p.health=p.maxHealth; p.ammo=p.maxMag; p.alive=true; p.status=initStatus(); p.tint=null; }); Bullets=[]; Particles=[]; AOEs=[]; inRound=true; }
 
+
 function endRound(winner) {
     inRound = false;
 
@@ -390,10 +393,11 @@ function endRound(winner) {
     setTimeout(() => showNextPick(), 420);
 }
 
+
 /* --------------------- Shooting system  --------------------- */
 function fireSingleBullet(player, angleOffset=0){ if(!player || !player.alive) return; const GUN_LENGTH = 50;
   const muzzleX = player.center().x + Math.cos(player.gunAngle + angleOffset) * GUN_LENGTH; const muzzleY = player.center().y + Math.sin(player.gunAngle + angleOffset) * GUN_LENGTH; const speed = (player.bulletSpeed || 8) * (player.bulletSpeedMultiplier || 1); const vx = Math.cos(player.gunAngle + angleOffset) * speed * (0.96 + Math.random()*0.08); const vy = Math.sin(player.gunAngle + angleOffset) * speed * (0.96 + Math.random()*0.08); const damage = Math.max(1, Math.round((player.baseDamage || 6) * (player.growDamageMultiplier || 1))); const b = new Bullet(muzzleX + rand(-3,3), muzzleY + rand(-3,3), vx, vy, player, { damage });
-   b.explosive = player.explosive || 0; b.timedDet = player.timedDet || 0; b.homing = player._homing || false; b.remote = player.remote || false; b.growMultiplier = player.growDamageMultiplier || 1; b.trickster = player.trickster || false; b.thruster = player._thruster || false; b.sneaky = player._sneaky || false; Bullets.push(b); }
+  if (player.timedDet) Bombs.push(new Bomb(muzzleX, muzzleY, b.damage, player)); b.explosive = player.explosive || 0; b.timedDet = player.timedDet || 0; b.homing = player._homing || false; b.remote = player.remote || false; b.growMultiplier = player.growDamageMultiplier || 1; b.trickster = player.trickster || false; b.thruster = player._thruster || false; b.sneaky = player._sneaky || false; Bullets.push(b); }
 
 function tryFire(player){ if(!player.alive) return; if(player.reload > 0) return; // reloading
   // determine bullets required for this shot
@@ -435,16 +439,7 @@ function tick(now){ const dt = Math.min(40, now - lastTime); lastTime = now; fra
     if(keyPress['l']){ const p = Players[1]; tryFire(p); keyPress['l'] = false; }
     // bullets update & collisions
     for(let i=Bullets.length-1;i>=0;i--){ const b=Bullets[i]; b.update(); const remove = bulletCollisionLogic(b); if(remove) Bullets.splice(i,1); } // AOEs update
-    for(let i=AOEs.length-1;i>=0;i--){ const a=AOEs[i]; if(!a.update()) AOEs.splice(i,1); else { if(a.type==='toxic'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ const owner = a.meta.owner;
-                    // Toxic cloud deals DPS and applies poison from owner
-                    if(owner && owner !== p){
-                        // damage scales with cloud's originating damage
-                        const dmgPerSec = 6 + Math.max(0, Math.floor((a.meta && a.meta.damage ? a.meta.damage : 0) * 0.12));
-                        // dt is available in tick loop (ms)
-                        try { p.health -= (dmgPerSec * (dt / 1000)); } catch(e){}
-                        if(owner && owner.poisonStacks) applyPoisonTo(p, Math.max(1, owner.poisonStacks), owner);
-                    }
-                } } } else if(a.type==='emp'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.status.slow.stacks = Math.max(p.status.slow.stacks || 0, 1); p.status.slow.time = 800; } } } else if(a.type==='saw'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.health -= 0.6; } } } else if(a.type==='radiance'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.health -= 0.8; } } } else if(a.type==='supernova'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ const dirx = (a.x - p.center().x) / Math.max(1, d); const diry = (a.y - p.center().y) / Math.max(1, d); p.vx += dirx * 0.8; p.vy += diry * 0.7; } } } } } // Bombs update
+    for(let i=AOEs.length-1;i>=0;i--){ const a=AOEs[i]; if(!a.update()) AOEs.splice(i,1); else { if(a.type==='toxic'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ const owner = a.meta.owner; if(owner && owner.poisonStacks) applyPoisonTo(p, owner.poisonStacks, owner); } } } else if(a.type==='emp'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.status.slow.stacks = Math.max(p.status.slow.stacks || 0, 1); p.status.slow.time = 800; } } } else if(a.type==='saw'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.health -= 0.6; } } } else if(a.type==='radiance'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ p.health -= 0.8; } } } else if(a.type==='supernova'){ for(const p of Players){ const d=Math.hypot(p.center().x - a.x, p.center().y - a.y); if(d <= a.r){ const dirx = (a.x - p.center().x) / Math.max(1, d); const diry = (a.y - p.center().y) / Math.max(1, d); p.vx += dirx * 0.8; p.vy += diry * 0.7; } } } } } // Bombs update
     for(let i=Bombs.length-1;i>=0;i--){ if(!Bombs[i].update()) Bombs.splice(i,1); }
 
     // particles
@@ -452,8 +447,10 @@ function tick(now){ const dt = Math.min(40, now - lastTime); lastTime = now; fra
 
 /* --------------------- Render --------------------- */
 function drawMap(ctx){ const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#081226'); g.addColorStop(1,'#061321'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 0.04; for(let i=0;i<6;i++){ ctx.fillStyle = ['#ff9a9e','#9be7ff','#d6b5ff','#ffd27a'][i%4]; ctx.beginPath(); ctx.ellipse((i*193+130)%W,(i*97+90)%H,240-i*20,120-i*10,0,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; for(const p of currentMap.platforms){ ctx.fillStyle = '#0e2230'; roundRect(ctx,p.x,p.y,p.w,p.h,8); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.02)'; roundRect(ctx,p.x,p.y,p.w,4,4); ctx.fill(); } if(currentMap.lavaY){ ctx.fillStyle = '#7a0a01'; ctx.fillRect(0, currentMap.lavaY, W, H - currentMap.lavaY); } }
-function render(){ drawMap(ctx); for(const a of AOEs) a.draw(ctx);
-    for(const bomb of Bombs) bomb.draw(ctx); for(const b of Bullets) b.draw(ctx); const order = Players.slice().sort((A,B)=> (A.y+A.h) - (B.y+B.h)); order.forEach(p=> p.draw(ctx)); for(const pt of Particles){ ctx.globalAlpha = clamp(pt.life/40,0,1); ctx.fillStyle = pt.color || '#fff'; ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx,12,12,360,88,10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '16px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(`P1 ${scores.p1}  —  P2 ${scores.p2}`, 24, 36); ctx.font = '12px monospace'; ctx.fillText(`Round ${roundNumber} (First to ${TARGET_SCORE})`, 24, 58); ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(`${Math.round(fps)} FPS`, W - 64, 36); if(pickState.active){ ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H); const boxW = Math.min(W * 0.92, 960), boxH = Math.min(H * 0.78, 360); const bx = (W - boxW)/2, by = (H - boxH)/2; ctx.fillStyle = '#18222f'; roundRect(ctx, bx, by, boxW, boxH, 20); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '24px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText((pickState.currentPicker === 'p1' ? 'Player 1' : 'Player 2') + ' — PICK A CARD', W/2, by + 36); const cardW = (boxW - 80)/5, cardH = boxH - 100; for(let i=0;i<pickState.options.length;i++){ const card = pickState.options[i]; const cx = bx + 40 + i*cardW, cy = by + 60; ctx.fillStyle = '#243447'; roundRect(ctx, cx, cy, cardW - 10, cardH, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '18px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(card.name, cx + 14, cy + 32); ctx.font = '13px Inter, Arial'; const wrapped = wrapText(ctx, card.desc || card.description || '', cardW - 40); for(let j=0;j<wrapped.length;j++){ ctx.fillText(wrapped[j], cx + 14, cy + 70 + j * 18); } ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillText((i+1).toString(), cx + cardW - 28, cy + 24); } } }
+function render(){ drawMap(ctx); for(let i=0;i<AOEs.length;i++){ AOEs[i].draw(ctx); }
+    for(let i=0;i<Bombs.length;i++){ Bombs[i].draw(ctx); } for(let i=0;i<Bullets.length;i++){ Bullets[i].draw(ctx); } const order = Players.slice().sort((A,B)=> (A.y+A.h) - (B.y+B.h)); order.forEach(p=> p.draw(ctx)); for(let i=0;i<Particles.length;i++){ const pt = Particles[i]; ctx.globalAlpha = clamp(pt.life/40,0,1); ctx.fillStyle = pt.color || '#fff'; ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx,12,12,360,88,10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '16px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(`P1 ${scores.p1}  —  P2 ${scores.p2}`, 24, 36); ctx.font = '12px monospace'; ctx.fillText(`Round ${roundNumber} (First to ${TARGET_SCORE})`, 24, 58); ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(`${Math.round(fps)} FPS`, W - 64, 36); if(pickState.active){ ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H); const boxW = Math.min(W * 0.92, 960), boxH = Math.min(H * 0.78, 360); const bx = (W - boxW)/2, by = (H - boxH)/2; ctx.fillStyle = '#18222f'; roundRect(ctx, bx, by, boxW, boxH, 20); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '24px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText((pickState.currentPicker === 'p1' ? 'Player 1' : 'Player 2') + ' — PICK A CARD', W/2, by + 36); const cardW = (boxW - 80)/5, cardH = boxH - 100; for(let i=0;i<pickState.options.length;i++){ const card = pickState.options[i]; const cx = bx + 40 + i*cardW, cy = by + 60; ctx.fillStyle = '#243447'; roundRect(ctx, cx, cy, cardW - 10, cardH, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '18px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(card.name, cx + 14, cy + 32); ctx.font = '13px Inter, Arial'; const wrapped = wrapText(ctx, card.desc || card.description || '', cardW - 40); for(let j=0;j<wrapped.length;j++){ ctx.fillText(wrapped[j], cx + 14, cy + 70 + j * 18); } ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillText((i+1).toString(), cx + cardW - 28, cy + 24); } } }
+
+
 
 /* --------------------- Admin GUI  --------------------- */
 // Simple admin panel — accessible locally. Player 1 is treated as admin by default.
@@ -480,13 +477,14 @@ window.__isAdmin = true; // change to false to disable
       <button id="adminUngod">Ungod</button>
     </div>
 
-    
+
 <div class="row">
   <select id="adminCardSelect" style="color:black" ></select>
   <input id="adminCardAmount" placeholder="Amount (e.g. 1)" />
   <button id="adminGiveCard">Give</button>
   <button id="adminGiveRandomCard">Give Random</button>
 </div>
+
 
     <div class="row">
       <input id="adminAmount" placeholder="Amount (e.g. 2)" />
@@ -573,7 +571,8 @@ window.__isAdmin = true; // change to false to disable
 
     <small>Toggle panel: ` + "`" + ` (backtick). Admin actions are local.</small>
   `;document.body.appendChild(panel);
-function isAdmin() { return window.__isAdmin; }
+
+  function isAdmin() { return window.__isAdmin; }
 
   function getSelectedPlayer(){
     const idx = parseInt(document.getElementById('adminPlayer').value) || 0;
@@ -648,7 +647,7 @@ function isAdmin() { return window.__isAdmin; }
     alert('Spawned bullet');
   });
 
-  
+
   // --- Expanded admin listeners ---
   // Populate card dropdown
   const cardSelect = document.getElementById('adminCardSelect');
@@ -675,7 +674,8 @@ function isAdmin() { return window.__isAdmin; }
       }
       alert('Gave '+amt+'x '+card.name);
   });
-function safeGetPlayer(){ const p = getSelectedPlayer(); if(!p) alert('Player not found'); return p; }
+
+  function safeGetPlayer(){ const p = getSelectedPlayer(); if(!p) alert('Player not found'); return p; }
 
   document.getElementById('adminUngod').addEventListener('click', ()=>{
     if(!isAdmin()) return alert('Not admin');
@@ -717,11 +717,12 @@ function safeGetPlayer(){ const p = getSelectedPlayer(); if(!p) alert('Player no
     alert('Stats reset');
   });
 
-  
+
   document.getElementById('adminSpawnDummy').addEventListener('click', ()=>{
     if(!isAdmin()) return alert('Not admin');
     alert("Click anywhere on the map to spawn a dummy.");
-function spawnClick(e){
+
+    function spawnClick(e){
         const rect = canvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -741,6 +742,7 @@ function spawnClick(e){
 
     canvas.addEventListener("click", spawnClick);
   });
+
 
   document.getElementById('adminForceReload').addEventListener('click', ()=>{
     if(!isAdmin()) return alert('Not admin');
@@ -826,7 +828,7 @@ function spawnClick(e){
   document.getElementById('adminTeleport').addEventListener('click', ()=>{
     if(!isAdmin()) return alert('Not admin');
     alert('Click anywhere on the canvas to teleport selected player');
-function onClick(e){
+    function onClick(e){
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
@@ -864,58 +866,66 @@ function onClick(e){
   document.getElementById('adminShowTrails').addEventListener('click', ()=>{
     window.__showTrails = !window.__showTrails; alert('Show trails = '+!!window.__showTrails);
   });
-  document.getElementById('adminShowStatus').addEventListener('click', () => {
-    console.log('Admin Status Click');
-});
+  document.getElementById('adminShowStatus').addEventListener('click', ()=>{
+    window.__showStatus = !window.__showStatus; alert('Show status timers = '+!!window.__showStatus);
+  });
 
-});
+  document.getElementById('adminCycleMap').addEventListener('click', ()=>{
+    currentMap = Maps[(currentMap.id + 1) % Maps.length]; alert('Cycled map to '+currentMap.name);
+  });
 
-});
-function adminShowStatus(p){
-    let out = "";
-    out += "HP: " + p.health + "/" + p.maxHealth + "\n";
+  document.getElementById('adminSlowMo').addEventListener('click', ()=>{
+    window.__slowmo = !window.__slowmo; alert('Slow motion = '+!!window.__slowmo);
+  });
 
-    if(p.status){
-        if(p.status.stun.time > 0) out += "Stun: " + p.status.stun.time.toFixed(0) + "ms\n";
-        if(p.status.poison.stacks > 0) out += "Poison: " + p.status.poison.stacks + " stacks\n";
-        if(p.status.parasite.stacks > 0) out += "Parasite: " + p.status.parasite.stacks + " stacks\n";
-        if(p.status.burn.stacks > 0) out += "Burn: " + p.status.burn.stacks + " stacks\n";
-        if(p.status.slow.time > 0) out += "Slow: " + p.status.slow.time.toFixed(0) + "ms\n";
-        if(p.status.silence.time > 0) out += "Silence: " + p.status.silence.time.toFixed(0) + "ms\n";
-        if(p.status.shield.value > 0) out += "Shield: " + p.status.shield.value + "\n";
-    }
+  document.getElementById('adminToggleFPS').addEventListener('click', ()=>{
+    window.__showFPS = !window.__showFPS; alert('FPS display toggle = '+!!window.__showFPS);
+  });
 
-    if(p.cards && p.cards.length){
-        out += "\nCards:\n";
-        for(const c of p.cards){
-            out += "- " + c + "\n";
-        }
-    }
+// toggle panel with backtick key
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === '`'){ if(!isAdmin()) return; panel.style.display = (panel.style.display === 'none') ? 'block' : 'none'; }
+  });
+})();
 
-    return out;
-}
+/* --------------------- Expose for debugging --------------------- */
+window.__ColourBattle = { Players, Bullets, AOEs, CardPool, startSequence, startRound, createExplosion, createToxicCloud };
 
-function adminRender(){
-    const p1 = Players[0];
-    const p2 = Players[1];
-    let t = "";
+})(); });
 
-    t += "--- PLAYER 1 ---\n";
-    t += adminShowStatus(p1) + "\n\n";
 
-    t += "--- PLAYER 2 ---\n";
-    t += adminShowStatus(p2) + "\n\n";
 
-    adminPanel.textContent = t;
-}
+/* ===== Admin Password Layer (Mode B) =====
+   - Admin UI remains visible but actions are disabled until unlocked.
+   - Password fetched from GitHub RAW URL; fallback to local saved password.
+   - Local password can be saved; but user must click Unlock to auto-fill and verify.
+*/
+(function(){
+  'use strict';
+const PASS_URL = 'https://raw.githubusercontent.com/freesubstotally-beep/Password/refs/heads/main/password.html';
 
-function adminTick(){
-    if(!adminPanelVisible) return;
-    adminRender();
-}
+  const LOCAL_KEY = '__admin_ultra_localpass';
+  const VERIFIED_KEY = '__admin_ultra_verified'; // store boolean string 'true' after verification in sessionStorage
+  function log(){ try{ console.log('AdminPW:', ...arguments); }catch(e){} }
+  let remotePass = null, remoteLoaded = false;
 
-setInterval(adminTick, 300);
-  })
+  // fetch remote password (best-effort)
+  function loadRemote(){
+    try{
+      fetch(PASS_URL, {cache:'no-store'}).then(r=>{
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        return r.text();
+      }).then(t=>{ remotePass = (t||'').trim(); remoteLoaded = true; log('remote pass loaded'); }).catch(e=>{ remoteLoaded=false; log('remote load failed', e); });
+    }catch(e){ log('remote fetch exception', e); remoteLoaded=false; }
+  }
+  loadRemote();
+
+  function getSavedLocal(){
+    try{ const v = localStorage.getItem(LOCAL_KEY); return v ? v : null; }catch(e){ return null; }
+  }
+  function saveLocalPlain(pass){
+    try{ if(!pass) return; localStorage.setItem(LOCAL_KEY, btoa(unescape(encodeURIComponent(pass)))); log('local pass saved'); }catch(e){ log('save local failed', e); }
+  }
   function getLocalPlain(){
     try{ const v = localStorage.getItem(LOCAL_KEY); if(!v) return null; return decodeURIComponent(escape(atob(v))); }catch(e){ return null; }
   }
@@ -991,7 +1001,6 @@ setInterval(adminTick, 300);
           } else {
             status.textContent = 'Remote verification failed';
             setSessionVerified(false);
-    return false;
             disableAdminButtons(root);
             return;
           }
@@ -1053,5 +1062,4 @@ setInterval(adminTick, 300);
 
   window.__AdminPW = { loadRemote, getLocalPlain, saveLocalPlain, isSessionVerified, setSessionVerified };
 
-; // close DOMContentLoaded callback
-(); // end password module
+})(); // end password module
