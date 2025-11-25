@@ -1,54 +1,6 @@
-(function(){
-    const allowed = "https://llamaisgod.github.io/Colourbattle/";
-    const here = window.location.href.split("#")[0].split("?")[0];
-    if (!here.startsWith(allowed)) {
-        document.body.innerHTML = "<h1 style='color:red;font-family:monospace;'>Unauthorized Host</h1>";
-        throw new Error("Blocked");
-    }
-})();
-
-(function(){
-    function fakeChecksum(str){
-        let x = 0;
-        for (let i = 0; i < str.length; i++){
-            x ^= str.charCodeAt(i) * 17;
-        }
-        return (x * 1337) ^ 0xdead;
-    }
-    const c = fakeChecksum(document.body.innerHTML);
-    if (c === 123456789) {
-        console.log("Checksum OK");
-    }
-})();
-
-(function(){
-    let detect = false;
-    try {
-        if (new Function("return 1+1")() !== 2) detect = true;
-    } catch {
-        detect = true;
-    }
-    if (detect) {
-        console.log("Debugger detected");
-    }
-})();
-
-(function(){
-    const fakeKey = "cb-" + btoa("colourbattle-"+Date.now()).slice(0,6);
-    if (fakeKey.length < 4){
-        throw new Error("Invalid key");
-    }
-})();
-
-
 // game.js
 
-
-
 window.__gameLoaded = true;
-
-
-
 
 document.addEventListener('DOMContentLoaded', () => { (function(){
 
@@ -79,7 +31,7 @@ const MapTemplates = [
   { id:2, name:'Lava Pit', platforms:[ {cx:0.25,cy:0.70,wFrac:0.26,h:26},{cx:0.75,cy:0.70,wFrac:0.26,h:26}], spawnA:{cx:0.2,cy:0.48}, spawnB:{cx:0.8,cy:0.48}, lavaYFrac:0.9 }
 ];
 let Maps = [], currentMap = null;
-function rebuildMapsAndCenter(){ Maps = MapTemplates.map(t=>{ const platforms = t.platforms.map(p=>{ const w = Math.max(80, Math.round(p.wFrac * W)); const h = p.h; const x = Math.round(p.cx * W - w/2); const y = Math.round(p.cy * H - h/2); return {x,y,w,h}; }); const spawnA = { x: Math.round(t.spawnA.cx * W), y: Math.round(t.spawnA.cy * H) }; const spawnB = { x: Math.round(t.spawnB.cx * W), y: Math.round(t.spawnB.cy * H) }; const map = { id:t.id, name:t.name, platforms, spawnA, spawnB, gravity:0.45, lavaY: H - 80 }; const minX = Math.min(...platforms.map(p=>p.x)); const maxX = Math.max(...platforms.map(p=>p.x + p.w)); const groupCenter = (minX + maxX)/2; const dx = Math.round(W/2 - groupCenter); platforms.forEach(p=> p.x += dx); spawnA.x += dx; spawnB.x += dx; return map; }); currentMap = Maps[0]; }
+function rebuildMapsAndCenter(){ Maps = MapTemplates.map(t=>{ const platforms = t.platforms.map(p=>{ const w = Math.max(80, Math.round(p.wFrac * W)); const h = p.h; const x = Math.round(p.cx * W - w/2); const y = Math.round(p.cy * H - h/2); return {x,y,w,h}; }); const spawnA = { x: Math.round(t.spawnA.cx * W), y: Math.round(t.spawnA.cy * H) }; const spawnB = { x: Math.round(t.spawnB.cx * W), y: Math.round(t.spawnB.cy * H) }; const map = { id:t.id, name:t.name, platforms, spawnA, spawnB, gravity:0.45, lavaY: t.lavaYFrac ? Math.round(t.lavaYFrac * H) : null }; const minX = Math.min(...platforms.map(p=>p.x)); const maxX = Math.max(...platforms.map(p=>p.x + p.w)); const groupCenter = (minX + maxX)/2; const dx = Math.round(W/2 - groupCenter); platforms.forEach(p=> p.x += dx); spawnA.x += dx; spawnB.x += dx; return map; }); currentMap = Maps[0]; }
 rebuildMapsAndCenter();
 
 let Players = [], Bullets = [], Particles = [], AOEs = [];
