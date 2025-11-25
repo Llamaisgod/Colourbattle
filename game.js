@@ -274,6 +274,15 @@ function applyDamageToTarget(target, rawDmg, owner){ if(!target) return; if(owne
 
 /* --------------------- bullet collision (extended) --------------------- */
 function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
+            // DAZZLE: stacked stun (0.5s per Dazzle card)
+            if (b.owner && b.owner.cards && b.owner.cards.includes('Dazzle')) {
+                try {
+                    const dazzleCount = b.owner.cards.filter(c => c === 'Dazzle').length;
+                    const stunTime = dazzleCount * 500;
+                    p.status.stun.time = Math.max(p.status.stun.time || 0, stunTime);
+                } catch(e){}
+            }
+    
             // DAZZLE: stacked stun (0.5s per Dazzle card) + particle burst
             if (b.owner && b.owner._dazzle) {
                 try {
