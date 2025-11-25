@@ -275,6 +275,13 @@ function applyDamageToTarget(target, rawDmg, owner){ if(!target) return; if(owne
 /* --------------------- bullet collision (extended) --------------------- */
 function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
             // DAZZLE: stacked stun (0.5s per Dazzle card)
+            try{
+                if(b.owner && b.owner.cards && b.owner.cards.filter){
+                    const dazzleCount = b.owner.cards.filter(c => c === 'Dazzle').length || 0;
+                    if(dazzleCount > 0){ const stunTime = dazzleCount * 500; p.status.stun.time = Math.max(p.status.stun.time || 0, stunTime); spawnParticles(b.x, b.y, 12, 'rgba(180,0,255,0.95)'); spawnParticles(b.x, b.y, 6, '#ffffff'); }
+                }
+            }catch(e){}
+    // DAZZLE: stacked stun (0.5s per Dazzle card)
             if (b.owner && b.owner.cards && b.owner.cards.includes('Dazzle')) {
                 try {
                     const dazzleCount = b.owner.cards.filter(c => c === 'Dazzle').length;
@@ -282,7 +289,7 @@ function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of 
                     p.status.stun.time = Math.max(p.status.stun.time || 0, stunTime);
                 } catch(e){}
             }
-    
+
             // DAZZLE: stacked stun (0.5s per Dazzle card) + particle burst
             if (b.owner && b.owner._dazzle) {
                 try {
@@ -321,7 +328,7 @@ const CardPool = [
   { name:'Demonic Pact', lavaYFrac:0.85, desc:'Shooting costs HP; removes shooting cooldown; more ammo', apply(p){ p._demonicPact=true; p.maxMag = (p.maxMag||4)+9; p.ammo = p.maxMag; } },
   { name:'Drill Ammo', lavaYFrac:0.85, desc:'Bullets pierce more targets', apply(p){ p.pierce = (p.pierce||0)+7; } },
   { name:'Dazzle', lavaYFrac:0.85, desc:'Bullets stun the opponent multiple times', apply(p){ p._dazzle=true; } },
-  { name:'Glass Cannon', lavaYFrac:0.85, desc:'+100% dmg; -100% HP', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxHealth = Math.max(6, Math.round(p.maxHealth * 0.1)); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Glass Cannon', lavaYFrac:0.85, desc:'+100% dmg; -90% HP', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxHealth = Math.max(6, Math.round(p.maxHealth * 0.1)); p.health = Math.min(p.health, p.maxHealth); } },
   { name:'Grow', lavaYFrac:0.85, desc:'Bullets gain damage over travel', apply(p){ p.hasGrow=true; } },
   { name:'Homing', lavaYFrac:0.85, desc:'Bullets home toward targets; -25% dmg', apply(p){ p._homing=true; p.baseDamage = Math.round((p.baseDamage||10)*0.75); } },
   { name:'Huge', lavaYFrac:0.85, desc:'+80% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.8); p.health = Math.min(p.health, p.maxHealth); } },
@@ -463,7 +470,7 @@ function tick(now){ const dt = Math.min(40, now - lastTime); lastTime = now; fra
     for(let i=Particles.length-1;i>=0;i--){ const pt = Particles[i]; pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.18; pt.life--; if(pt.life <= 0) Particles.splice(i,1); } if(Players[0].health <= 0 || Players[1].health <= 0){ const winner = Players[0].health > Players[1].health ? Players[0] : Players[1]; endRound(winner); } } else { Players.forEach(p=>{ if(Math.random() < 0.004) p.legFrame = 1; }); } render(); keyPress = {}; requestAnimationFrame(tick); }
 
 /* --------------------- Render --------------------- */
-function drawMap(ctx){ const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#081226'); g.addColorStop(1,'#061321'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 0.04; for(let i=0;i<6;i++){ ctx.fillStyle = ['#ff9a9e','#9be7ff','#d6b5ff','#ffd27a'][i%4]; ctx.beginPath(); ctx.ellipse((i*193+130)%W,(i*97+90)%H,240-i*20,120-i*10,0,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; for(const p of currentMap.platforms){ ctx.fillStyle = '#0e2230'; roundRect(ctx,p.x,p.y,p.w,p.h,8); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.02)'; roundRect(ctx,p.x,p.y,p.w,4,4); ctx.fill(); } if(currentMap.lavaY){ ctx.fillStyle = '#7a0a01'; ctx.fillRect(0, currentMap.lavaY, W, H - currentMap.lavaY); } }
+function drawMap(ctx){ const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#081226'); g.addColorStop(1,'#061321'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 0.04; for(let i=0;i<6;i++){ ctx.fillStyle = ['#ff9a9e','#9be7ff','#d6b5ff','#ffd27a'][i%4]; ctx.beginPath(); ctx.ellipse((i*193+130)%W,(i*97+90)%H,240-i*20,120-i*10,0,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; for(const p of currentMap.platforms){ ctx.fillStyle = '#0e2230'; roundRect(ctx,p.x,p.y,p.w,p.h,8); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.02)'; roundRect(ctx,p.x,p.y,p.w,4,4); ctx.fill(); } if(currentMap.lavaY){ ctx.fillStyle = '#ff3f1f'; ctx.fillRect(0, currentMap.lavaY, W, H - currentMap.lavaY); } }
 function render(){ drawMap(ctx); for(let i=0;i<AOEs.length;i++){ AOEs[i].draw(ctx); }
     for(let i=0;i<Bombs.length;i++){ Bombs[i].draw(ctx); } for(let i=0;i<Bullets.length;i++){ Bullets[i].draw(ctx); } const order = Players.slice().sort((A,B)=> (A.y+A.h) - (B.y+B.h)); order.forEach(p=> p.draw(ctx)); for(let i=0;i<Particles.length;i++){ const pt = Particles[i]; ctx.globalAlpha = clamp(pt.life/40,0,1); ctx.fillStyle = pt.color || '#fff'; ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx,12,300,360,88,10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '16px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(`P1 ${scores.p1}  —  P2 ${scores.p2}`, 24, 324); ctx.font = '12px monospace'; ctx.fillText(`Round ${roundNumber} (First to ${TARGET_SCORE})`, 24, 346); ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(`${Math.round(fps)} FPS`, W - 64, 36); if(pickState.active){ ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H); const boxW = Math.min(W * 0.92, 960), boxH = Math.min(H * 0.78, 360); const bx = (W - boxW)/2, by = (H - boxH)/2; ctx.fillStyle = '#18222f'; roundRect(ctx, bx, by, boxW, boxH, 20); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '24px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText((pickState.currentPicker === 'p1' ? 'Player 1' : 'Player 2') + ' — PICK A CARD', W/2, by + 36); const cardW = (boxW - 80)/5, cardH = boxH - 100; for(let i=0;i<pickState.options.length;i++){ const card = pickState.options[i]; const cx = bx + 40 + i*cardW, cy = by + 60; ctx.fillStyle = '#243447'; roundRect(ctx, cx, cy, cardW - 10, cardH, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '18px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(card.name, cx + 14, cy + 32); ctx.font = '13px Inter, Arial'; const wrapped = wrapText(ctx, card.desc || card.description || '', cardW - 40); for(let j=0;j<wrapped.length;j++){ ctx.fillText(wrapped[j], cx + 14, cy + 70 + j * 18); } ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillText((i+1).toString(), cx + cardW - 28, cy + 24); } } }
 
