@@ -1,3 +1,5 @@
+
+/* HARD-LOCK canvas to 1920×1080 with zero scaling */
 html, body {
     margin: 0;
     padding: 0;
@@ -10,14 +12,28 @@ html, body {
 #gameCanvas {
     width: 1920px !important;
     height: 1080px !important;
+
+    min-width: 1920px !important;
+    min-height: 1080px !important;
+
+    max-width: 1920px !important;
+    max-height: 1080px !important;
+
     display: block;
-    margin-left: auto;
-    margin-right: auto;
-    margin-top: calc(50vh - 540px);
+
+
+    position: absolute;
+    left: 50%;
+    top: calc(50% - 540px);
+    transform: translateX(-50%);
+
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+
+    background: #000;
 }
 
+/* Prevent scaling/select/touch issues */
 * {
     touch-action: none;
     user-select: none;
