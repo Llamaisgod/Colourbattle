@@ -6,16 +6,8 @@ document.addEventListener('DOMContentLoaded', () => { (function(){
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
-// DPR-aware sizing to keep text crisp on high-DPR displays
-const DPR = Math.max(1, window.devicePixelRatio || 1);
-canvas.style.width = '1920px';
-canvas.style.height = '1080px';
-canvas.width = Math.round(1920 * DPR);
-canvas.height = Math.round(1080 * DPR);
-// scale the drawing context so all drawing coordinates remain in CSS pixels (1920x1080)
-ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-let W = 1920,
-    H = 1080;
+let W = canvas.width = 1920,
+    H = canvas.height = 1080;
 window.addEventListener('resize', () => {});
 
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
@@ -79,7 +71,7 @@ class Player {
   respawnAt(pos){ this.x=pos.x; this.y=pos.y; this.vx=0; this.vy=0; this.health=this.maxHealth; this.mag=this.maxMag; this.alive=true; this.status=initStatus(); this.tint=null; this.ammo=this.maxMag; }
   takeDamage(amount, source){ if(!this.alive) return false; let dmg=Math.max(1, Math.round(amount - (this.status.shield.value || 0))); if(this._decay){ applyBurnTo(this,1,source); return { killed:false, revived:false }; } this.health -= dmg; if(this.health <= 0){ if(this.canRevive){ this.canRevive=false; this.maxHealth = Math.max(8, Math.round(this.maxHealth * 0.65)); this.health = Math.round(this.maxHealth * 0.45); this.tint={r:255,g:240,b:120,a:0.6}; Scheduler.schedule(900, ()=>{ if(this.tint) this.tint=null; }); return { killed:false, revived:true }; } else { this.alive=false; return { killed:true, revived:false }; } } return { killed:false, revived:false }; }
   _onDealDamage(amount){ if(this.lifesteal && this.lifesteal > 0){ this.health = Math.min(this.maxHealth, this.health + amount * this.lifesteal); } if(this.scavenger && this.scavenger > 0){ this.ammo = Math.min(this.maxMag, this.ammo + this.scavenger); } if(this._tasteOfBloodActive){ this.tasteOfBlood_ms = Math.max(this.tasteOfBlood_ms, 3000); this.moveSpeedMultiplier = Math.max(this.moveSpeedMultiplier, 1.5); } if(this._brawler){ const owner=this; const prevMax = owner._brawlerPrevMax || owner.maxHealth; owner._brawlerPrevMax = owner.maxHealth; owner.maxHealth = Math.round(owner.maxHealth * 3.0); owner.health = Math.min(owner.maxHealth, owner.health + 1); Scheduler.schedule(3000, ()=>{ owner.maxHealth = prevMax; owner.health = Math.min(owner.health, owner.maxHealth); }); } if(this.onDealDamageHooks) for(const fn of this.onDealDamageHooks) try{ fn(this, amount); }catch(e){ console.error(e); } }
-  update(input, dt, opponent){ const dtSec = dt / 1000; const moving = Math.abs(this.vx) > 0.4; if(moving){ this.legTime += dt * 0.18; if(this.legTime > 1){ this.legFrame = (this.legFrame + 1) % 4; this.legTime = 0; } } else { this.legFrame = 1; this.legTime = 0; } const effectiveSpeed = (this._baseSpeed || this.speed) * (this.moveSpeedMultiplier || 1); if(input){ if(input.left) this.vx = -effectiveSpeed; else if(input.right) this.vx = effectiveSpeed; else this.vx *= 0.84; if(input.jump && this.onGround){
+  update(input, dt, opponent){ const dtSec = dt / 1000; const moving = Math.abs(this.vx) > 0.4; if(moving){ this.legTime += dt * 0.018; if(this.legTime > 1){ this.legFrame = (this.legFrame + 1) % 4; this.legTime = 0; } } else { this.legFrame = 1; this.legTime = 0; } const effectiveSpeed = (this._baseSpeed || this.speed) * (this.moveSpeedMultiplier || 1); if(input){ if(input.left) this.vx = -effectiveSpeed; else if(input.right) this.vx = effectiveSpeed; else this.vx *= 0.84; if(input.jump && this.onGround){
         this.vy = -13; // MUCH HIGHER JUMP
         this.onGround = false;
       } } else { this.vx *= 0.90; } this.vy += currentMap.gravity || 0.45; this.x += this.vx; this.y += this.vy; this.onGround = false; for(const plat of currentMap.platforms){ if(this.x + this.w > plat.x && this.x < plat.x + plat.w){ const feet = this.y + this.h; if(feet >= plat.y && feet - this.vy <= plat.y + 12){ this.y = plat.y - this.h; this.vy = 0; this.onGround = true; } } } if(currentMap.lavaY && this.y + this.h > currentMap.lavaY){ if(!this._lavaCooldown || performance.now() - this._lavaCooldown > 300){ this._lavaCooldown = performance.now(); this.health -= 10; this.vy = -18; spawnParticles(this.center().x, this.center().y, 12, '#ff6a3c'); this.tint = { r:255, g:120, b:60, a:0.45 }; Scheduler.schedule(450, ()=>{ if(this.tint && this.status.poison.time <= 0 && this.status.parasite.time <= 0) this.tint = null; }); } this.y = Math.min(this.y, currentMap.lavaY - this.h - 1); } if(opponent){ const my = this.center(); const op = opponent.center(); const dx = op.x - my.x; const dy = op.y - my.y; this.gunAngleTarget = Math.atan2(dy, dx); const diff = (this.gunAngleTarget - this.gunAngle); const a = ((diff + Math.PI) % (Math.PI*2)) - Math.PI; this.gunAngle = this.gunAngle + a * clamp(0.08 * dtSec * 60, 0, 1); this.facing = Math.cos(this.gunAngle) >= 0 ? 1 : -1; } if(this.status.poison.time > 0){ this.status.poison.time -= dt; const stacks = this.status.poison.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:0, g:200, b:50, a:0.32 }); if(this.status.poison.time <= 0){ this.status.poison.stacks = 0; this.status.poison.source = null; } } if(this.status.parasite.time > 0){ this.status.parasite.time -= dt; const stacks = this.status.parasite.stacks; const dmgPerSec = 5 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; const attacker = this.status.parasite.source; if(attacker && attacker.alive){ const heal = dmg * 0.5; attacker.health = Math.min(attacker.maxHealth, attacker.health + heal); } this.tint = blendTints(this.tint, { r:160, g:0, b:200, a:0.42 }); if(this.status.parasite.time <= 0){ this.status.parasite.stacks = 0; this.status.parasite.source = null; } } if(this.status.burn.time > 0){ this.status.burn.time -= dt; const stacks = this.status.burn.stacks; const dmgPerSec = 4 * stacks; const dmg = dmgPerSec * dtSec; this.health -= dmg; this.tint = blendTints(this.tint, { r:220, g:80, b:0, a:0.32 }); if(this.status.burn.time <= 0){ this.status.burn.stacks = 0; this.status.burn.source = null; } } if(this.status.slow.time > 0){ this.status.slow.time -= dt; if(this.status.slow.time <= 0) this.status.slow.stacks = 0; } if(this.tasteOfBlood_ms > 0){ this.tasteOfBlood_ms = Math.max(0, this.tasteOfBlood_ms - dt); if(this.tasteOfBlood_ms <= 0) this.moveSpeedMultiplier = 1; } if(this.reload > 0){ this.reload -= dt; if(this.reload <= 0){ this.reload = 0; this.ammo = this.maxMag; } } if(this.hasGrow){ this._growTimer = (this._growTimer || 0) + dt; while(this._growTimer >= 10){ this.growDamageMultiplier = (this.growDamageMultiplier || 1) * 1.01; this._growTimer -= 10; } } // --- Pristine Perseverence: +400% Max HP when above 90% ---
@@ -274,22 +266,6 @@ function applyDamageToTarget(target, rawDmg, owner){ if(!target) return; if(owne
 
 /* --------------------- bullet collision (extended) --------------------- */
 function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
-            // DAZZLE: stacked stun (0.5s per Dazzle card)
-            try{
-                if(b.owner && b.owner.cards && b.owner.cards.filter){
-                    const dazzleCount = b.owner.cards.filter(c => c === 'Dazzle').length || 0;
-                    if(dazzleCount > 0){ const stunTime = dazzleCount * 500; p.status.stun.time = Math.max(p.status.stun.time || 0, stunTime); spawnParticles(b.x, b.y, 12, 'rgba(180,0,255,0.95)'); spawnParticles(b.x, b.y, 6, '#ffffff'); }
-                }
-            }catch(e){}
-    // DAZZLE: stacked stun (0.5s per Dazzle card)
-            if (b.owner && b.owner.cards && b.owner.cards.includes('Dazzle')) {
-                try {
-                    const dazzleCount = b.owner.cards.filter(c => c === 'Dazzle').length;
-                    const stunTime = dazzleCount * 500;
-                    p.status.stun.time = Math.max(p.status.stun.time || 0, stunTime);
-                } catch(e){}
-            }
-
             // DAZZLE: stacked stun (0.5s per Dazzle card) + particle burst
             if (b.owner && b.owner._dazzle) {
                 try {
@@ -307,49 +283,49 @@ function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of 
 
 /* --------------------- Card Pool --------------------- */
 const CardPool = [
-  { name:'Barrage', lavaYFrac:0.85, desc:'Fire many bullets at once. (+5 bullets/shot) -70% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+5; p.baseDamage = Math.round((p.baseDamage||10)*0.30); p.maxMag += 5; p.ammo = p.maxMag; } },
-  { name:'Buckshot', lavaYFrac:0.85, desc:'Shotgun style shot (+6 pellets) -60% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+6; p.baseDamage = Math.round((p.baseDamage||10)*0.4); p.spread = (p.spread||0)+0.25; } },
-  { name:'Burst', lavaYFrac:0.85, desc:'3-round burst (-60% dmg)', apply(p){ p.burstEnabled=true; p.burstCount=3; p.burstDelay=60; p.baseDamage = Math.round((p.baseDamage||10)*0.4); } },
-  { name:'Spray', lavaYFrac:0.85, desc:'High firerate (+12 ammo, -75% dmg)', apply(p){ p.rapidFireEnabled=true; p.attackSpeed = (p.attackSpeed||1)*10; p.maxMag += 12; p.ammo = p.maxMag; p.baseDamage = Math.round((p.baseDamage||10)*0.25); } },
-  { name:'Scavenger', lavaYFrac:0.85, desc:'Dealing damage reloads your weapon (restore ammo on hit)', apply(p){ p.reloadOnHit = true; p.scavenger = 1; } },
+  { name:'Barrage', desc:'Fire many bullets at once. (+5 bullets/shot) -70% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+5; p.baseDamage = Math.round((p.baseDamage||10)*0.30); p.maxMag += 5; p.ammo = p.maxMag; } },
+  { name:'Buckshot', desc:'Shotgun style shot (+6 pellets) -60% dmg', apply(p){ p.multishotEnabled=true; p.bulletsPerShot=(p.bulletsPerShot||1)+6; p.baseDamage = Math.round((p.baseDamage||10)*0.4); p.spread = (p.spread||0)+0.25; } },
+  { name:'Burst', desc:'3-round burst (-60% dmg)', apply(p){ p.burstEnabled=true; p.burstCount=3; p.burstDelay=60; p.baseDamage = Math.round((p.baseDamage||10)*0.4); } },
+  { name:'Spray', desc:'High firerate (+12 ammo, -75% dmg)', apply(p){ p.rapidFireEnabled=true; p.attackSpeed = (p.attackSpeed||1)*10; p.maxMag += 12; p.ammo = p.maxMag; p.baseDamage = Math.round((p.baseDamage||10)*0.25); } },
+  { name:'Scavenger', desc:'Dealing damage reloads your weapon (restore ammo on hit)', apply(p){ p.reloadOnHit = true; p.scavenger = 1; } },
 
-  { name:'Big bullets', lavaYFrac:0.85, desc:'Bigger bullets (slight damage up)', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*1.12); } },
-  { name:'Bombs Away', lavaYFrac:0.85, desc:'Spawn bombs around you when specific condition triggers', apply(p){ p._bombsAway = true; p.maxHealth = Math.round((p.maxHealth||100) * 1.15); p.ammo = p.maxMag; } },
-  { name:'Bouncy', lavaYFrac:0.85, desc:'+2 bounces; +25% damage', apply(p){ p.bounce = (p.bounce||0)+2; p.baseDamage = Math.round((p.baseDamage||10)*1.25); } },
-  { name:'Brawler', lavaYFrac:0.85, desc:'+200% HP 3s after hitting', apply(p){ p._brawler=true; } },
-  { name:'Careful Planning', lavaYFrac:0.85, desc:'+100% damage; -150% atkspd', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.attackSpeed *= 0.4; } },
-  { name:'Chase', lavaYFrac:0.85, desc:'+60% move toward opponent; +30% HP', apply(p){ p.moveSpeedMultiplier = Math.max(p.moveSpeedMultiplier,1.0); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.maxHealth, p.health); p._chase = true; } },
-  { name:'Chilling Presence', lavaYFrac:0.85, desc:'Slow nearby enemies; +25% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.maxHealth, p.health); p._chillPresence = true; } },
-  { name:'Cold Bullets', lavaYFrac:0.85, desc:'+70% slow on hit', apply(p){ p._coldBullets = true; } },
-  { name:'Combine', lavaYFrac:0.85, desc:'+100% dmg; -2 ammo', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxMag = Math.max(1, (p.maxMag||4)-2); p.ammo = Math.min(p.ammo, p.maxMag); } },
-  { name:'Dazzle', lavaYFrac:0.85, desc:'Bullets stun enemies on hit', apply(p){ p._dazzle=true; } },
-  { name:'Decay', lavaYFrac:0.85, desc:'Damage to you is dealt over 4s; +50% HP', apply(p){ p._decay=true; p.maxHealth = Math.round(p.maxHealth * 1.5); p.health = Math.min(p.maxHealth, p.health); } },
-  { name:'Defender', lavaYFrac:0.85, desc:'More HP and little cooldown shaves (non-block variant)', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Demonic Pact', lavaYFrac:0.85, desc:'Shooting costs HP; removes shooting cooldown; more ammo', apply(p){ p._demonicPact=true; p.maxMag = (p.maxMag||4)+9; p.ammo = p.maxMag; } },
-  { name:'Drill Ammo', lavaYFrac:0.85, desc:'Bullets pierce more targets', apply(p){ p.pierce = (p.pierce||0)+7; } },
-  { name:'Dazzle', lavaYFrac:0.85, desc:'Bullets stun the opponent multiple times', apply(p){ p._dazzle=true; } },
-  { name:'Glass Cannon', lavaYFrac:0.85, desc:'+100% dmg; -90% HP', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxHealth = Math.max(6, Math.round(p.maxHealth * 0.1)); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Grow', lavaYFrac:0.85, desc:'Bullets gain damage over travel', apply(p){ p.hasGrow=true; } },
-  { name:'Homing', lavaYFrac:0.85, desc:'Bullets home toward targets; -25% dmg', apply(p){ p._homing=true; p.baseDamage = Math.round((p.baseDamage||10)*0.75); } },
-  { name:'Huge', lavaYFrac:0.85, desc:'+80% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.8); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Leech', lavaYFrac:0.85, desc:'+75% lifesteal; +30% HP', apply(p){ p.lifesteal = Math.max(p.lifesteal, 0.75); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Lifestealer', lavaYFrac:0.85, desc:'Heal by proximity to enemy; +25% HP', apply(p){ p._lifestealer=true; p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Mayhem', lavaYFrac:0.85, desc:'+5 bounces; -15% dmg', apply(p){ p.bounce = (p.bounce||0) + 5; p.baseDamage = Math.round((p.baseDamage||10)*0.85); } },
-  { name:'Parasite', lavaYFrac:0.85, desc:'Parasite shots heal you (50% of DoT)', apply(p){ p.parasiteStacks = (p.parasiteStacks||0) + 1; } },
-  { name:'Phoenix', lavaYFrac:0.85, desc:'Respawn once on death (one-time)', apply(p){ p.canRevive=true; p.maxHealth = Math.round(p.maxHealth * 0.65); p.health = Math.min(p.health, p.maxHealth); } },
-  { name:'Poison', lavaYFrac:0.85, desc:'Poison shots (stacking)', apply(p){ p.poisonStacks = (p.poisonStacks||0) + 1; } },
-  { name:'Pristine Perseverence', lavaYFrac:0.85, desc:'+400% HP when above 90% HP', apply(p){ p._pristine=true; } },
-  { name:'Quick Reload', lavaYFrac:0.85, desc:'-70% reload time', apply(p){ p.reloadTime = Math.max(8, Math.round((p.reloadTime||70) * 0.30)); } },
-  { name:'Quick Shot', lavaYFrac:0.85, desc:'+150% bullet speed', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.5; p.reloadTime += 250; } },
-  { name:'Steady Shot', lavaYFrac:0.85, desc:'+40% HP; +100% bullet speed', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.4); p.bulletSpeed = (p.bulletSpeed||8) * 2.0; } },
-  { name:'Tank', lavaYFrac:0.85, desc:'+100% HP; -25% ATKSPD', apply(p){ p.maxHealth = Math.round(p.maxHealth * 2.0); p.attackSpeed *= 0.75; } },
-  { name:'Target Bounce', lavaYFrac:0.85, desc:'+1 bounce; bullets aim for visible targets when bouncing', apply(p){ p.targetBounce = true; p.bounce = (p.bounce||0) + 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
-  { name:'Taste of Blood', lavaYFrac:0.85, desc:'+50% movement speed for 3s after dealing damage; +30% lifesteal', apply(p){ p._tasteOfBloodActive = true; p.lifesteal = Math.max(p.lifesteal, 0.30); } },
-  { name:'Thruster', lavaYFrac:0.85, desc:'Bullets push targets on hit', apply(p){ p._thruster = true; } },
-  { name:'Timed Detonation', lavaYFrac:0.85, desc:'Bullets spawn bombs after 0.5s', apply(p){ p.timedDet = 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.85); } },
-  { name:'Toxic Cloud', lavaYFrac:0.85, desc:'Bullets spawn poison cloud on impact', apply(p){ p.toxicCloud = true; p.attackSpeed *= 0.8; } },
-  { name:'Trickster', lavaYFrac:0.85, desc:'+2 bounces; damage buff per bounce', apply(p){ p.trickster = true; p.bounce = (p.bounce||0) + 2; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
-  { name:'Wind Up', lavaYFrac:0.85, desc:'+100% bullet speed; +60% damage; heavy attack penalty', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.0; p.baseDamage = Math.round((p.baseDamage||10) * 1.6); p.attackSpeed *= 0.5; } }
+  { name:'Big bullets', desc:'Bigger bullets (slight damage up)', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*1.12); } },
+  { name:'Bombs Away', desc:'Spawn bombs around you when specific condition triggers', apply(p){ p._bombsAway = true; p.maxHealth = Math.round((p.maxHealth||100) * 1.15); p.ammo = p.maxMag; } },
+  { name:'Bouncy', desc:'+2 bounces; +25% damage', apply(p){ p.bounce = (p.bounce||0)+2; p.baseDamage = Math.round((p.baseDamage||10)*1.25); } },
+  { name:'Brawler', desc:'+200% HP 3s after hitting', apply(p){ p._brawler=true; } },
+  { name:'Careful Planning', desc:'+100% damage; -150% atkspd', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.attackSpeed *= 0.4; } },
+  { name:'Chase', desc:'+60% move toward opponent; +30% HP', apply(p){ p.moveSpeedMultiplier = Math.max(p.moveSpeedMultiplier,1.0); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.maxHealth, p.health); p._chase = true; } },
+  { name:'Chilling Presence', desc:'Slow nearby enemies; +25% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.maxHealth, p.health); p._chillPresence = true; } },
+  { name:'Cold Bullets', desc:'+70% slow on hit', apply(p){ p._coldBullets = true; } },
+  { name:'Combine', desc:'+100% dmg; -2 ammo', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxMag = Math.max(1, (p.maxMag||4)-2); p.ammo = Math.min(p.ammo, p.maxMag); } },
+  { name:'Dazzle', desc:'Bullets stun enemies on hit', apply(p){ p._dazzle=true; } },
+  { name:'Decay', desc:'Damage to you is dealt over 4s; +50% HP', apply(p){ p._decay=true; p.maxHealth = Math.round(p.maxHealth * 1.5); p.health = Math.min(p.maxHealth, p.health); } },
+  { name:'Defender', desc:'More HP and little cooldown shaves (non-block variant)', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Demonic Pact', desc:'Shooting costs HP; removes shooting cooldown; more ammo', apply(p){ p._demonicPact=true; p.maxMag = (p.maxMag||4)+9; p.ammo = p.maxMag; } },
+  { name:'Drill Ammo', desc:'Bullets pierce more targets', apply(p){ p.pierce = (p.pierce||0)+7; } },
+  { name:'Dazzle', desc:'Bullets stun the opponent multiple times', apply(p){ p._dazzle=true; } },
+  { name:'Glass Cannon', desc:'+100% dmg; -90% HP', apply(p){ p.baseDamage = Math.round((p.baseDamage||10)*2); p.maxHealth = Math.max(6, Math.round(p.maxHealth * 0.1)); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Grow', desc:'Bullets gain damage over travel', apply(p){ p.hasGrow=true; } },
+  { name:'Homing', desc:'Bullets home toward targets; -25% dmg', apply(p){ p._homing=true; p.baseDamage = Math.round((p.baseDamage||10)*0.75); } },
+  { name:'Huge', desc:'+80% HP', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.8); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Leech', desc:'+75% lifesteal; +30% HP', apply(p){ p.lifesteal = Math.max(p.lifesteal, 0.75); p.maxHealth = Math.round(p.maxHealth * 1.3); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Lifestealer', desc:'Heal by proximity to enemy; +25% HP', apply(p){ p._lifestealer=true; p.maxHealth = Math.round(p.maxHealth * 1.25); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Mayhem', desc:'+5 bounces; -15% dmg', apply(p){ p.bounce = (p.bounce||0) + 5; p.baseDamage = Math.round((p.baseDamage||10)*0.85); } },
+  { name:'Parasite', desc:'Parasite shots heal you (50% of DoT)', apply(p){ p.parasiteStacks = (p.parasiteStacks||0) + 1; } },
+  { name:'Phoenix', desc:'Respawn once on death (one-time)', apply(p){ p.canRevive=true; p.maxHealth = Math.round(p.maxHealth * 0.65); p.health = Math.min(p.health, p.maxHealth); } },
+  { name:'Poison', desc:'Poison shots (stacking)', apply(p){ p.poisonStacks = (p.poisonStacks||0) + 1; } },
+  { name:'Pristine Perseverence', desc:'+400% HP when above 90% HP', apply(p){ p._pristine=true; } },
+  { name:'Quick Reload', desc:'-70% reload time', apply(p){ p.reloadTime = Math.max(8, Math.round((p.reloadTime||70) * 0.30)); } },
+  { name:'Quick Shot', desc:'+150% bullet speed', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.5; p.reloadTime += 250; } },
+  { name:'Steady Shot', desc:'+40% HP; +100% bullet speed', apply(p){ p.maxHealth = Math.round(p.maxHealth * 1.4); p.bulletSpeed = (p.bulletSpeed||8) * 2.0; } },
+  { name:'Tank', desc:'+100% HP; -25% ATKSPD', apply(p){ p.maxHealth = Math.round(p.maxHealth * 2.0); p.attackSpeed *= 0.75; } },
+  { name:'Target Bounce', desc:'+1 bounce; bullets aim for visible targets when bouncing', apply(p){ p.targetBounce = true; p.bounce = (p.bounce||0) + 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
+  { name:'Taste of Blood', desc:'+50% movement speed for 3s after dealing damage; +30% lifesteal', apply(p){ p._tasteOfBloodActive = true; p.lifesteal = Math.max(p.lifesteal, 0.30); } },
+  { name:'Thruster', desc:'Bullets push targets on hit', apply(p){ p._thruster = true; } },
+  { name:'Timed Detonation', desc:'Bullets spawn bombs after 0.5s', apply(p){ p.timedDet = 1; p.baseDamage = Math.round((p.baseDamage||10) * 0.85); } },
+  { name:'Toxic Cloud', desc:'Bullets spawn poison cloud on impact', apply(p){ p.toxicCloud = true; p.attackSpeed *= 0.8; } },
+  { name:'Trickster', desc:'+2 bounces; damage buff per bounce', apply(p){ p.trickster = true; p.bounce = (p.bounce||0) + 2; p.baseDamage = Math.round((p.baseDamage||10) * 0.8); } },
+  { name:'Wind Up', desc:'+100% bullet speed; +60% damage; heavy attack penalty', apply(p){ p.bulletSpeed = (p.bulletSpeed||8) * 2.0; p.baseDamage = Math.round((p.baseDamage||10) * 1.6); p.attackSpeed *= 0.5; } }
 ];
 
 /* --------------------- Pick system (always 5 options) --------------------- */
@@ -448,7 +424,7 @@ function tryFire(player){ if(!player.alive) return; if(player.reload > 0) return
 document.addEventListener('keydown', e=>{ if(!keys[e.key]) keyPress[e.key]=true; keys[e.key]=true; if(e.key==='Tab') e.preventDefault(); if(pickState && pickState.active && ['1','2','3','4','5'].includes(e.key)){ const idx=parseInt(e.key)-1; const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; if(pickState.options[idx]){ player.applyCard(pickState.options[idx]); pickState.active=false; pickState.chosen=pickState.options[idx]; setTimeout(()=> showNextPick(),220); } } });
 document.addEventListener('keyup', e=>{ keys[e.key]=false; });
 canvas.addEventListener('mousemove', e=>{ const rect = canvas.getBoundingClientRect(); mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top; });
-canvas.addEventListener('mousedown', e=>{ mouse.down=true; if(showSplash) startSequence(); if(pickState && pickState.active){ const rect = canvas.getBoundingClientRect(); const mx = e.clientX - rect.left; const my = e.clientY - rect.top; const boxW=Math.min(W*0.92,960), boxH=Math.min(H*0.78,360); const bx=(W-boxW)/2, by=(H-boxH)/2; const cardW=(boxW-80)/5, cardH=boxH-100; for(let i=0;i<pickState.options.length;i++){ const cx=bx + 40 + i*cardW, cy=by + 60; if(mx>=cx && mx<=cx+cardW && my>=cy && my<=cy+cardH){ const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; player.applyCard(pickState.options[i]); pickState.active=false; pickState.chosen=pickState.options[i]; spawnParticles(mx,my,20,'#ffd27a'); setTimeout(()=> showNextPick(),280); break; } } } });
+canvas.addEventListener('mousedown', e=>{ mouse.down=true; if(showSplash) startSequence(); if(pickState && pickState.active){ const rect = canvas.getBoundingClientRect(); const mx = e.clientX - rect.left, my = e.clientY - rect.top; const boxW=Math.min(W*0.92,960), boxH=Math.min(H*0.78,360); const bx=(W-boxW)/2, by=(H-boxH)/2; const cardW=(boxW-80)/5, cardH=boxH-100; for(let i=0;i<pickState.options.length;i++){ const cx=bx + 40 + i*cardW, cy=by + 60; if(mx>=cx && mx<=cx+cardW && my>=cy && my<=cy+cardH){ const player = pickState.currentPicker==='p1' ? Players[0] : Players[1]; player.applyCard(pickState.options[i]); pickState.active=false; pickState.chosen=pickState.options[i]; spawnParticles(mx,my,20,'#ffd27a'); setTimeout(()=> showNextPick(),280); break; } } } });
 canvas.addEventListener('mouseup', e=>{ mouse.down=false; });
 function startSequence(){ started=true; showSplash=false; awaitingPicks=['p1','p2']; pickState.active=false; setTimeout(()=> showNextPick(),120); }
 
@@ -470,9 +446,9 @@ function tick(now){ const dt = Math.min(40, now - lastTime); lastTime = now; fra
     for(let i=Particles.length-1;i>=0;i--){ const pt = Particles[i]; pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.18; pt.life--; if(pt.life <= 0) Particles.splice(i,1); } if(Players[0].health <= 0 || Players[1].health <= 0){ const winner = Players[0].health > Players[1].health ? Players[0] : Players[1]; endRound(winner); } } else { Players.forEach(p=>{ if(Math.random() < 0.004) p.legFrame = 1; }); } render(); keyPress = {}; requestAnimationFrame(tick); }
 
 /* --------------------- Render --------------------- */
-function drawMap(ctx){ const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#081226'); g.addColorStop(1,'#061321'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 0.04; for(let i=0;i<6;i++){ ctx.fillStyle = ['#ff9a9e','#9be7ff','#d6b5ff','#ffd27a'][i%4]; ctx.beginPath(); ctx.ellipse((i*193+130)%W,(i*97+90)%H,240-i*20,120-i*10,0,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; for(const p of currentMap.platforms){ ctx.fillStyle = '#0e2230'; roundRect(ctx,p.x,p.y,p.w,p.h,8); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.02)'; roundRect(ctx,p.x,p.y,p.w,4,4); ctx.fill(); } if(currentMap.lavaY){ ctx.fillStyle = '#ff3f1f'; ctx.fillRect(0, currentMap.lavaY, W, H - currentMap.lavaY); } }
+function drawMap(ctx){ const g = ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#081226'); g.addColorStop(1,'#061321'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H); ctx.globalAlpha = 0.04; for(let i=0;i<6;i++){ ctx.fillStyle = ['#ff9a9e','#9be7ff','#d6b5ff','#ffd27a'][i%4]; ctx.beginPath(); ctx.ellipse((i*193+130)%W,(i*97+90)%H,240-i*20,120-i*10,0,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; for(const p of currentMap.platforms){ ctx.fillStyle = '#0e2230'; roundRect(ctx,p.x,p.y,p.w,p.h,8); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.02)'; roundRect(ctx,p.x,p.y,p.w,4,4); ctx.fill(); } if(currentMap.lavaY){ ctx.fillStyle = '#7a0a01'; ctx.fillRect(0, currentMap.lavaY, W, H - currentMap.lavaY); } }
 function render(){ drawMap(ctx); for(let i=0;i<AOEs.length;i++){ AOEs[i].draw(ctx); }
-    for(let i=0;i<Bombs.length;i++){ Bombs[i].draw(ctx); } for(let i=0;i<Bullets.length;i++){ Bullets[i].draw(ctx); } const order = Players.slice().sort((A,B)=> (A.y+A.h) - (B.y+B.h)); order.forEach(p=> p.draw(ctx)); for(let i=0;i<Particles.length;i++){ const pt = Particles[i]; ctx.globalAlpha = clamp(pt.life/40,0,1); ctx.fillStyle = pt.color || '#fff'; ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx,12,300,360,88,10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '16px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(`P1 ${scores.p1}  —  P2 ${scores.p2}`, 24, 324); ctx.font = '12px monospace'; ctx.fillText(`Round ${roundNumber} (First to ${TARGET_SCORE})`, 24, 346); ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(`${Math.round(fps)} FPS`, W - 64, 36); if(pickState.active){ ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H); const boxW = Math.min(W * 0.92, 960), boxH = Math.min(H * 0.78, 360); const bx = (W - boxW)/2, by = (H - boxH)/2; ctx.fillStyle = '#18222f'; roundRect(ctx, bx, by, boxW, boxH, 20); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '24px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText((pickState.currentPicker === 'p1' ? 'Player 1' : 'Player 2') + ' — PICK A CARD', W/2, by + 36); const cardW = (boxW - 80)/5, cardH = boxH - 100; for(let i=0;i<pickState.options.length;i++){ const card = pickState.options[i]; const cx = bx + 40 + i*cardW, cy = by + 60; ctx.fillStyle = '#243447'; roundRect(ctx, cx, cy, cardW - 10, cardH, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '18px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(card.name, cx + 14, cy + 32); ctx.font = '13px Inter, Arial'; const wrapped = wrapText(ctx, card.desc || card.description || '', cardW - 40); for(let j=0;j<wrapped.length;j++){ ctx.fillText(wrapped[j], cx + 14, cy + 70 + j * 18); } ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillText((i+1).toString(), cx + cardW - 28, cy + 24); } } }
+    for(let i=0;i<Bombs.length;i++){ Bombs[i].draw(ctx); } for(let i=0;i<Bullets.length;i++){ Bullets[i].draw(ctx); } const order = Players.slice().sort((A,B)=> (A.y+A.h) - (B.y+B.h)); order.forEach(p=> p.draw(ctx)); for(let i=0;i<Particles.length;i++){ const pt = Particles[i]; ctx.globalAlpha = clamp(pt.life/40,0,1); ctx.fillStyle = pt.color || '#fff'; ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2); ctx.fill(); } ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; roundRect(ctx,12,12,360,88,10); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '16px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(`P1 ${scores.p1}  —  P2 ${scores.p2}`, 24, 36); ctx.font = '12px monospace'; ctx.fillText(`Round ${roundNumber} (First to ${TARGET_SCORE})`, 24, 58); ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(`${Math.round(fps)} FPS`, W - 64, 36); if(pickState.active){ ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H); const boxW = Math.min(W * 0.92, 960), boxH = Math.min(H * 0.78, 360); const bx = (W - boxW)/2, by = (H - boxH)/2; ctx.fillStyle = '#18222f'; roundRect(ctx, bx, by, boxW, boxH, 20); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '24px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText((pickState.currentPicker === 'p1' ? 'Player 1' : 'Player 2') + ' — PICK A CARD', W/2, by + 36); const cardW = (boxW - 80)/5, cardH = boxH - 100; for(let i=0;i<pickState.options.length;i++){ const card = pickState.options[i]; const cx = bx + 40 + i*cardW, cy = by + 60; ctx.fillStyle = '#243447'; roundRect(ctx, cx, cy, cardW - 10, cardH, 14); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '18px Inter, Arial'; ctx.textAlign = 'left'; ctx.fillText(card.name, cx + 14, cy + 32); ctx.font = '13px Inter, Arial'; const wrapped = wrapText(ctx, card.desc || card.description || '', cardW - 40); for(let j=0;j<wrapped.length;j++){ ctx.fillText(wrapped[j], cx + 14, cy + 70 + j * 18); } ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillText((i+1).toString(), cx + cardW - 28, cy + 24); } } }
 
 
 
