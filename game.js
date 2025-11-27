@@ -23,6 +23,8 @@ window.addEventListener('mousedown', e=>{ mouse.down = true; });
 window.addEventListener('mouseup', e=>{ mouse.down = false; });
 
 let lastTime = performance.now(), fps = 0, frames = 0, fpsTimer = 0;
+// Attack speed firing throttle (ms timestamps per player)
+let nextFireTime = {};
 const Scheduler = { tasks: [], schedule(delay, fn){ this.tasks.push({runAt: performance.now()+delay, fn}); }, update(){ const now = performance.now(); for(let i=this.tasks.length-1;i>=0;i--){ if(now >= this.tasks[i].runAt){ try{ this.tasks[i].fn(); }catch(e){ console.error(e); } this.tasks.splice(i,1); } } } };
 
 const MapTemplates = [
@@ -257,6 +259,19 @@ class Bomb {
 
 let Bombs = [];
 
+// ⭐ Timed detonation helper: consistently spawn Bombs when bullets meet conditions
+function spawnTimedBomb(bullet){
+    try{
+        if(!bullet) return;
+        // only spawn if the owner has timedDet flag (mirrors previous logic)
+        const owner = bullet.owner || null;
+        if(!owner || !owner.timedDet) return;
+        // create bomb at bullet position (matches Bomb constructor usage)
+        Bombs.push(new Bomb(Math.round(bullet.x), Math.round(bullet.y), bullet.damage, owner));
+    }catch(e){ console.error('spawnTimedBomb error', e); }
+}
+
+
 /* --------------------- Explosions & clouds --------------------- */
 function createExplosion(x,y,damage,baseRadius=60,owner=null){ const radius = Math.max(20, Math.round(baseRadius * (1 + damage / 100))); AOEs.push(new AOE(x,y,radius, Math.round((0.25 + (damage/300))*1000), 'explosion', { damage, owner })); spawnParticles(x,y, Math.min(160, Math.round(radius/2)), '#ffb07a'); for(const p of Players){ const d=Math.hypot(p.center().x - x, p.center().y - y); if(d <= radius + p.w*0.5){ const dmg = Math.max(1, Math.round(damage * (1 - (d / Math.max(1, radius))))); p.health -= dmg; const dirx = (p.center().x - x) / Math.max(1,d); const diry = (p.center().y - y) / Math.max(1,d); p.vx += dirx * (radius * 0.06); p.vy += diry * (radius * 0.04); } } }
 function createToxicCloud(x,y,damage,owner){ const base=70; const radius = Math.max(30, Math.round(base * (1 + damage / 100))); AOEs.push(new AOE(x,y,radius,5000,'toxic',{damage,owner})); }
@@ -265,8 +280,12 @@ function createToxicCloud(x,y,damage,owner){ const base=70; const radius = Math.
 function applyDamageToTarget(target, rawDmg, owner){ if(!target) return; if(owner && owner._decay){ applyBurnTo(target,1,owner); try{ owner._onDealDamage && owner._onDealDamage(1); }catch(e){} return; } if(typeof target.takeDamage === 'function'){ target.takeDamage(rawDmg, owner); } else { target.health -= rawDmg; } try{ owner && owner._onDealDamage && owner._onDealDamage(rawDmg); }catch(e){ console.error(e); } }
 
 /* --------------------- bullet collision (extended) --------------------- */
-function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
-            // DAZZLE: stacked stun (0.5s per Dazzle card) + particle burst
+function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of currentMap.platforms){ if(b.x > p.x && b.x < p.x + p.w && b.y > p.y && b.y < p.y + p.h + 12){ if(b.bounces < b.maxBounces){ b.vy *= -0.45; b.vx *= 0.8; b.bounces++; // ⭐ Bomb on bounce (timed det) ⭐
+try{ spawnTimedBomb(b); }catch(e){}
+if(b.trickster) b.damage = Math.round(b.damage * 1.8); return false; } else { if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.timedDet) Scheduler.schedule(420, ()=> createExplosion(b.x,b.y,b.damage,60,b.owner)); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); return true; } } } for(const p of Players){ if(p !== b.owner && p.alive){ const d = Math.hypot(b.x - p.center().x, b.y - p.center().y); if(d < b.r + Math.max(p.w,p.h)/2 * 0.48){ const dmg = Math.round(b.damage); if(b.owner && b.owner.poisonStacks) applyPoisonTo(p, b.owner.poisonStacks, b.owner); if(b.owner && b.owner.parasiteStacks) applyParasiteTo(p, b.owner.parasiteStacks, b.owner); applyDamageToTarget(p, dmg, b.owner);
+            // ⭐ Bomb when hitting a player ⭐
+try{ spawnTimedBomb(b); }catch(e){}
+// DAZZLE: stacked stun (0.5s per Dazzle card) + particle burst
             if (b.owner && b.owner._dazzle) {
                 try {
                     const dazzleCount = (b.owner.cards && b.owner.cards.filter(c => c === 'Dazzle').length) || 1;
@@ -279,7 +298,7 @@ function bulletCollisionLogic(b){ if(b.y > H + 400) return true; for(const p of 
                     spawnParticles(b.x, b.y, 6, '#ffffff');
                 } catch (e) {}
             }
-    if(b.thruster){ const dirx=(p.center().x-b.x)/Math.max(1,d); const diry=(p.center().y-b.y)/Math.max(1,d); p.vx += dirx * 2.2; p.vy += diry * 1.6; } if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); if(b.pierces>0) b.pierces--; else return true; } } } if(b.life <=0) return true; return false; }
+    if(b.thruster){ const dirx=(p.center().x-b.x)/Math.max(1,d); const diry=(p.center().y-b.y)/Math.max(1,d); p.vx += dirx * 2.2; p.vy += diry * 1.6; } if(b.explosive) createExplosion(b.x,b.y,b.damage,60,b.owner); if(b.owner && b.owner.toxicCloud) createToxicCloud(b.x,b.y,b.damage,b.owner); if(b.pierces>0) b.pierces--; else return true; } } } if(b.life <= 0){ try{ spawnTimedBomb(b); }catch(e){} return true; } return false; }
 
 /* --------------------- Card Pool --------------------- */
 const CardPool = [
@@ -399,7 +418,20 @@ function fireSingleBullet(player, angleOffset=0){ if(!player || !player.alive) r
   const muzzleX = player.center().x + Math.cos(player.gunAngle + angleOffset) * GUN_LENGTH; const muzzleY = player.center().y + Math.sin(player.gunAngle + angleOffset) * GUN_LENGTH; const speed = (player.bulletSpeed || 8) * (player.bulletSpeedMultiplier || 1); const vx = Math.cos(player.gunAngle + angleOffset) * speed * (0.96 + Math.random()*0.08); const vy = Math.sin(player.gunAngle + angleOffset) * speed * (0.96 + Math.random()*0.08); const damage = Math.max(1, Math.round((player.baseDamage || 6) * (player.growDamageMultiplier || 1))); const b = new Bullet(muzzleX + rand(-3,3), muzzleY + rand(-3,3), vx, vy, player, { damage });
   if (player.timedDet) Bombs.push(new Bomb(muzzleX, muzzleY, b.damage, player)); b.explosive = player.explosive || 0; b.timedDet = player.timedDet || 0; b.homing = player._homing || false; b.remote = player.remote || false; b.growMultiplier = player.growDamageMultiplier || 1; b.trickster = player.trickster || false; b.thruster = player._thruster || false; b.sneaky = player._sneaky || false; Bullets.push(b); }
 
-function tryFire(player){ if(!player.alive) return; if(player.reload > 0) return; // reloading
+function tryFire(player){
+  if(!player || !player.alive) return;
+  if(player.reload > 0) return;
+
+  // ⭐ Attack Speed throttle ⭐
+  try{
+    const now = performance.now();
+    const key = player.id || 'p'+(player.id?player.id:'');
+    const baseDelay = 220; // ms base delay between shots
+    const fireDelay = baseDelay / (player.attackSpeed || 1);
+    if(nextFireTime[key] && now < nextFireTime[key]) return;
+    nextFireTime[key] = now + fireDelay;
+  }catch(e){ /* defensive */ }
+ // reloading
   // determine bullets required for this shot
   let bulletsNeeded = 1;
   if(player.multishotEnabled && player.bulletsPerShot > 1){ bulletsNeeded = player.bulletsPerShot; }
