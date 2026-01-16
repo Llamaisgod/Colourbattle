@@ -2,16 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ColourBattle — FULL RELEASE (Status System)</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ColourBattle — Fixed Display</title>
+  <style>
+    /* FULL CSS INTEGRATED */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      background-color: #000; /* Letterbox bars color */
+      overflow: hidden; 
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      /* Forces the canvas to fill the screen */
+      width: 100vw;
+      height: 100vh;
+      /* FIX: Keeps the game 16:9. No stretching, no 'hella zoomed' distortion */
+      object-fit: contain; 
+      background: #071022;
+      image-rendering: auto;
+    }
+  </style>
 </head>
 <body>
+
   <canvas id="gameCanvas"></canvas>
-  <script src="protect.js"></script>
+
   <script src="game.js"></script>
 
 </body>
 </html>
-
-
